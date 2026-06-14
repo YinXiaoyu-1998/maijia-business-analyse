@@ -1,0 +1,22 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Local analysis outputs and private exports
+documents/
+raw_exports/
+*.xlsx
+*.xls
+*.csv
+*.json
+*.html
+
+# Local environments
+.venv/
+venv/
+env/
+
+# Editor and OS noise
+.idea/
+.vscode/
