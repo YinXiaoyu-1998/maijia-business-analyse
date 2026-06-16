@@ -40,8 +40,9 @@ Read `references/meituan_export_workflow.zh.md`. The core workflow is:
 1. Open Meituan 管家 report center.
 2. Go to `自助取数 -> 自助营业取数`.
 3. Select `全量数据`, set business dates, expand filters, and select all fields.
-4. Query and export.
-5. Open `下载清单记录`, find the matching date range, and click `下载` on that row.
+4. Query, then click the report-page `导出` button to create an export task.
+5. Open `下载清单记录`, find the row whose date range and request time match the task.
+6. After the status becomes `导出完成`, click `下载` in that row's far-right `操作` column; it is usually next to `删除` and is not the report-page `导出` button.
 
 If Chrome blocks the temporary `s3plus.sankuai.com` URL, copy the signed URL and run:
 
