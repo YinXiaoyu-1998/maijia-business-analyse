@@ -387,8 +387,23 @@ HTML_TEMPLATE = r'''<!doctype html>
       outline: none;
     }
     .mini-select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(0, 109, 119, .12); }
-    .chart { width: 100%; min-height: 310px; overflow: hidden; }
+    .chart { width: 100%; min-height: 310px; overflow: hidden; position: relative; }
     .chart svg { display: block; width: 100%; min-height: 310px; }
+    .chart-tooltip {
+      position: absolute;
+      display: none;
+      pointer-events: none;
+      z-index: 4;
+      background: #111827;
+      color: #fff;
+      border-radius: 6px;
+      padding: 7px 9px;
+      font-size: 12px;
+      line-height: 1.35;
+      box-shadow: 0 8px 20px rgba(17, 24, 39, .18);
+      white-space: nowrap;
+    }
+    .chart-tooltip strong { display: block; margin-bottom: 2px; color: #fff; }
     .legend { display: flex; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 12px; margin-top: 8px; }
     .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 5px; }
     .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
@@ -576,7 +591,11 @@ HTML_TEMPLATE = r'''<!doctype html>
   <script>
     const data = JSON.parse(document.getElementById('payload').textContent);
     const stores = data.comparison;
-    const fmtWan = v => `${(Number(v || 0) / 10000).toLocaleString('zh-CN', {maximumFractionDigits: 1})}万`;
+    const fmtWan = v => {
+      const raw = Number(v || 0) / 10000;
+      const value = Math.abs(raw) < 0.05 ? 0 : raw;
+      return `${value.toLocaleString('zh-CN', {maximumFractionDigits: 1})}万`;
+    };
     const fmtNum = v => Number(v || 0).toLocaleString('zh-CN', {maximumFractionDigits: 0});
     const fmtYuan = v => `${Number(v || 0).toLocaleString('zh-CN', {maximumFractionDigits: 1})}元`;
     const fmtPct = v => v === null || v === undefined || v === '' ? 'N/A' : `${(Number(v) * 100).toFixed(1)}%`;
@@ -759,6 +778,16 @@ HTML_TEMPLATE = r'''<!doctype html>
       const yMax = Math.ceil(max / 500000) * 500000;
       const yScale = v => h - bottom - Number(v || 0) / yMax * (h-top-bottom);
       const root = svg('svg', {viewBox:`0 0 ${w} ${h}`});
+      const tip = document.createElement('div');
+      tip.className = 'chart-tooltip';
+      const showTrendTip = (event, seriesLabel, weekLabel, weekRange, value) => {
+        const bounds = el.getBoundingClientRect();
+        tip.innerHTML = `<strong>${seriesLabel}</strong>${weekRange || weekLabel}<br>业务收入：${fmtWan(value)}`;
+        tip.style.left = `${event.clientX - bounds.left + 12}px`;
+        tip.style.top = `${event.clientY - bounds.top - 14}px`;
+        tip.style.display = 'block';
+      };
+      const hideTrendTip = () => { tip.style.display = 'none'; };
       [0, .25, .5, .75, 1].forEach(t => {
         const value = yMax * t;
         const y = yScale(value);
@@ -777,7 +806,7 @@ HTML_TEMPLATE = r'''<!doctype html>
           return [x,y,r,Number(raw || 0),i];
         }).filter(Boolean);
       }
-      function drawTrendLine(field, color, dash) {
+      function drawTrendLine(field, color, dash, seriesLabel, rangeField) {
         const points = trendPoints(field);
         if (!points.length) return;
         root.appendChild(svg('polyline', {
@@ -790,15 +819,25 @@ HTML_TEMPLATE = r'''<!doctype html>
           ...(dash ? {'stroke-dasharray': dash} : {})
         }));
         points.forEach(([x,y,r,value], i) => {
-          root.appendChild(svg('circle', {cx:x, cy:y, r:4, fill:'#fff', stroke:color, 'stroke-width':2}));
+          const point = svg('circle', {cx:x, cy:y, r:5, fill:'#fff', stroke:color, 'stroke-width':2, style:'cursor:pointer'});
+          const weekLabel = String(r.week_label || '');
+          const weekRange = String(r[rangeField] || '');
+          const title = svg('title', {});
+          title.textContent = `${seriesLabel} ${weekRange || weekLabel} 业务收入：${fmtWan(value)}`;
+          point.appendChild(title);
+          point.addEventListener('mousemove', event => showTrendTip(event, seriesLabel, weekLabel, weekRange, value));
+          point.addEventListener('mouseleave', hideTrendTip);
+          point.addEventListener('focus', event => showTrendTip(event, seriesLabel, weekLabel, weekRange, value));
+          point.addEventListener('blur', hideTrendTip);
+          root.appendChild(point);
           if (i === points.length - 1) {
             const labelY = field === priorField ? y + 19 : y - 9;
             root.appendChild(svg('text', {x:x-7, y:labelY, 'text-anchor':'end', 'font-size':'11', fill:color, 'font-weight':'800'})).textContent = fmtWan(value);
           }
         });
       }
-      drawTrendLine(currentField, colors.teal, '');
-      if (hasComparisonShape) drawTrendLine(priorField, colors.amber, '7 5');
+      drawTrendLine(currentField, colors.teal, '', currentTrendYear, hasComparisonShape ? 'current_week_range' : 'week_label');
+      if (hasComparisonShape) drawTrendLine(priorField, colors.amber, '7 5', `${yoyTrendYear}同期`, 'prior_week_range');
 
       rows.forEach((r, i) => {
         const x = left + i / Math.max(1, rows.length - 1) * (w-left-right);
@@ -818,6 +857,7 @@ HTML_TEMPLATE = r'''<!doctype html>
       root.appendChild(svg('text', {x:w-right, y:18, 'text-anchor':'end', 'font-size':'11', fill:'#657386'})).textContent = data.trend_note || '';
       el.innerHTML = '';
       el.appendChild(root);
+      el.appendChild(tip);
     }
     function renderMixBars() {
       const rows = stores;
@@ -883,9 +923,7 @@ HTML_TEMPLATE = r'''<!doctype html>
           const bw = Math.abs(v) / max * 360;
           const x = v >= 0 ? mid : mid - bw;
           root.appendChild(svg('rect', {x, y:y+off, width:bw, height:12, rx:2, fill:c, opacity:.9}));
-          if (bw > 34) {
-            root.appendChild(svg('text', {x: v >= 0 ? x + bw + 7 : x - 7, y:y+off+10, 'text-anchor': v >= 0 ? 'start':'end', 'font-size':'11', fill:'#657386'})).textContent = fmtWan(v);
-          }
+          root.appendChild(svg('text', {x: v >= 0 ? x + bw + 7 : x - 7, y:y+off+10, 'text-anchor': v >= 0 ? 'start':'end', 'font-size':'11', fill:'#657386'})).textContent = fmtWan(v);
         });
       });
       el.innerHTML = '';
