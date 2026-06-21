@@ -89,6 +89,49 @@ def build_trend_entities(rows: list[dict[str, Any]], max_week_end: date | None) 
     return entities
 
 
+def build_trend_comparison_entities(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not rows:
+        return []
+
+    def build_series(entity_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        groups: dict[int, dict[str, Any]] = {}
+        for row in entity_rows:
+            try:
+                window_index = int(float(row.get("window_index") or 0))
+            except (TypeError, ValueError):
+                continue
+            if window_index <= 0:
+                continue
+            item = groups.setdefault(
+                window_index,
+                {
+                    "window_index": window_index,
+                    "week_label": row.get("week_label") or "",
+                    "current_net_revenue": None,
+                    "prior_net_revenue": None,
+                    "current_week_range": "",
+                    "prior_week_range": "",
+                },
+            )
+            series_key = str(row.get("series_key") or "")
+            revenue = float(row.get("net_revenue") or 0)
+            week_range = f"{row.get('week_start')}-{row.get('week_end')}"
+            if series_key == "current_year":
+                item["current_net_revenue"] = round((item["current_net_revenue"] or 0) + revenue, 2)
+                item["current_week_range"] = week_range
+            elif series_key == "prior_year":
+                item["prior_net_revenue"] = round((item["prior_net_revenue"] or 0) + revenue, 2)
+                item["prior_week_range"] = week_range
+        return [groups[index] for index in sorted(groups)]
+
+    stores = sorted({str(row.get("门店名称") or "") for row in rows if row.get("门店名称")})
+    entities = [{"key": "__all__", "label": "全体门店", "rows": build_series(rows)}]
+    for store in stores:
+        store_rows = [row for row in rows if row.get("门店名称") == store]
+        entities.append({"key": store, "label": store, "rows": build_series(store_rows)})
+    return entities
+
+
 def median(values: list[float]) -> float:
     clean = sorted(value for value in values if value is not None)
     if not clean:
@@ -107,6 +150,8 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
     channels = read_csv(input_dir / "weekly_store_channel_metrics.csv")
     dayparts = read_csv(input_dir / "weekly_store_daypart_metrics.csv")
     weekly = read_csv(input_dir / "weekly_store_metrics.csv")
+    trend_comparison_path = input_dir / "weekly_trend_comparison_metrics.csv"
+    trend_comparison = read_csv(trend_comparison_path) if trend_comparison_path.exists() else []
 
     segment_by_store = {row["门店名称"]: row for row in segments}
     driver_by_store = {
@@ -136,6 +181,18 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
     problem_count = sum(1 for row in comparison if row.get("segment") == "问题门店")
     revenue_threshold = median([float(row.get("current_net_revenue") or 0) for row in comparison])
     current_window_end = parse_report_date(summary["meta"]["target_windows"]["current"]["end"])
+    yoy_window_end = parse_report_date(summary["meta"]["target_windows"]["yoy"]["end"])
+    current_trend_start = current_window_end.fromordinal(current_window_end.toordinal() - 111) if current_window_end else None
+    yoy_trend_start = yoy_window_end.fromordinal(yoy_window_end.toordinal() - 111) if yoy_window_end else None
+    trend_note = "完整周口径；实线=本年，虚线=同期，均为最近 16 个自然周窗口。"
+    def short_date(value: date) -> str:
+        return f"{value.month}/{value.day}"
+
+    if current_window_end and yoy_window_end and current_trend_start and yoy_trend_start:
+        trend_note = (
+            f"完整周口径；实线={current_window_end:%Y}（{short_date(current_trend_start)}-{short_date(current_window_end)}），"
+            f"虚线={yoy_window_end:%Y}同期（{short_date(yoy_trend_start)}-{short_date(yoy_window_end)}）。"
+        )
 
     current_channels = [row for row in channels if row.get("period") == "本周"]
     channel_by_store: dict[str, dict[str, float]] = {}
@@ -194,8 +251,8 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
         "channel_by_store": channel_by_store,
         "dayparts": aggregate_dayparts([row for row in dayparts if row.get("period") in {"本周", "环比周"}]),
         "trend": aggregate_trend(weekly, current_window_end),
-        "trend_entities": build_trend_entities(weekly, current_window_end),
-        "trend_note": f"完整周口径，截止 {summary['meta']['target_windows']['current']['end']}；不含之后未完整周。",
+        "trend_entities": build_trend_comparison_entities(trend_comparison) or build_trend_entities(weekly, current_window_end),
+        "trend_note": trend_note,
         "data_gaps": summary.get("data_gaps", []),
     }
 
@@ -437,7 +494,7 @@ HTML_TEMPLATE = r'''<!doctype html>
       <div class="panel full-row">
         <div class="panel-head">
           <div class="panel-title-row"><h3>最近 16 周收入趋势</h3><select id="trendStoreSelect" class="mini-select" aria-label="选择门店趋势"></select></div>
-          <span class="label" id="trendMetricLabel">完整周，整体业务收入（万元）</span>
+          <span class="label" id="trendMetricLabel">完整周，整体业务收入（万元）；实线=本年，虚线=同期</span>
         </div>
         <div class="chart" id="trend"></div>
       </div>
@@ -526,6 +583,8 @@ HTML_TEMPLATE = r'''<!doctype html>
     const cleanName = s => String(s || '').replace('麦家小馆（', '').replace('）', '');
     const colors = { teal:'#006d77', blue:'#2f5b9f', green:'#3a7d44', amber:'#b85c00', red:'#b23a48', violet:'#7557a6', orange:'#d96b3b' };
     let selectedTrendKey = '__all__';
+    const currentTrendYear = String(data.meta?.target_windows?.current?.end || '').slice(0, 4) || '本年';
+    const yoyTrendYear = String(data.meta?.target_windows?.yoy?.end || '').slice(0, 4) || '同期';
 
     function setText(id, value) { document.getElementById(id).textContent = value; }
     function svg(tag, attrs = {}) {
@@ -690,9 +749,13 @@ HTML_TEMPLATE = r'''<!doctype html>
       const entity = currentTrendEntity();
       const rows = entity.rows || [];
       const isAllStores = entity.key === '__all__';
-      document.getElementById('trendMetricLabel').textContent = `完整周，${isAllStores ? '整体' : cleanName(entity.label)}业务收入（万元）`;
+      document.getElementById('trendMetricLabel').textContent = `完整周，${isAllStores ? '整体' : cleanName(entity.label)}业务收入（万元）；实线=${currentTrendYear}，虚线=${yoyTrendYear}同期`;
       const w = 1120, h = 360, left = 82, right = 84, top = 34, bottom = 78;
-      const max = Math.max(...rows.map(r => Number(r.net_revenue || 0)), 1);
+      const hasComparisonShape = rows.some(r => Object.prototype.hasOwnProperty.call(r, 'current_net_revenue') || Object.prototype.hasOwnProperty.call(r, 'prior_net_revenue'));
+      const currentField = hasComparisonShape ? 'current_net_revenue' : 'net_revenue';
+      const priorField = 'prior_net_revenue';
+      const allValues = rows.flatMap(r => [Number(r[currentField] || 0), Number(r[priorField] || 0)]);
+      const max = Math.max(...allValues, 1);
       const yMax = Math.ceil(max / 500000) * 500000;
       const yScale = v => h - bottom - Number(v || 0) / yMax * (h-top-bottom);
       const root = svg('svg', {viewBox:`0 0 ${w} ${h}`});
@@ -704,23 +767,53 @@ HTML_TEMPLATE = r'''<!doctype html>
       });
       root.appendChild(svg('line', {x1:left, y1:top, x2:left, y2:h-bottom, stroke:'#9aa7b5'}));
       root.appendChild(svg('line', {x1:left, y1:h-bottom, x2:w-right, y2:h-bottom, stroke:'#9aa7b5'}));
-      const points = rows.map((r,i) => {
+
+      function trendPoints(field) {
+        return rows.map((r,i) => {
+          const raw = r[field];
+          if (raw === null || raw === undefined || raw === '') return null;
+          const x = left + i / Math.max(1, rows.length - 1) * (w-left-right);
+          const y = yScale(Number(raw || 0));
+          return [x,y,r,Number(raw || 0),i];
+        }).filter(Boolean);
+      }
+      function drawTrendLine(field, color, dash) {
+        const points = trendPoints(field);
+        if (!points.length) return;
+        root.appendChild(svg('polyline', {
+          points: points.map(p=>`${p[0]},${p[1]}`).join(' '),
+          fill: 'none',
+          stroke: color,
+          'stroke-width': 3,
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          ...(dash ? {'stroke-dasharray': dash} : {})
+        }));
+        points.forEach(([x,y,r,value], i) => {
+          root.appendChild(svg('circle', {cx:x, cy:y, r:4, fill:'#fff', stroke:color, 'stroke-width':2}));
+          if (i === points.length - 1) {
+            const labelY = field === priorField ? y + 19 : y - 9;
+            root.appendChild(svg('text', {x:x-7, y:labelY, 'text-anchor':'end', 'font-size':'11', fill:color, 'font-weight':'800'})).textContent = fmtWan(value);
+          }
+        });
+      }
+      drawTrendLine(currentField, colors.teal, '');
+      if (hasComparisonShape) drawTrendLine(priorField, colors.amber, '7 5');
+
+      rows.forEach((r, i) => {
         const x = left + i / Math.max(1, rows.length - 1) * (w-left-right);
-        const y = yScale(Number(r.net_revenue || 0));
-        return [x,y,r];
-      });
-      root.appendChild(svg('polyline', {points:points.map(p=>`${p[0]},${p[1]}`).join(' '), fill:'none', stroke:colors.teal, 'stroke-width':3}));
-      points.forEach(([x,y,r], i) => {
-        root.appendChild(svg('circle', {cx:x, cy:y, r:4, fill:colors.teal}));
-        if (i === rows.length - 1) {
-          root.appendChild(svg('text', {x:x-7, y:y-9, 'text-anchor':'end', 'font-size':'11', fill:colors.teal, 'font-weight':'800'})).textContent = fmtWan(r.net_revenue);
-        }
-        if (i % 2 === 0 || i === points.length - 1) {
-          const anchor = i === points.length - 1 ? 'end' : 'middle';
-          const tx = i === points.length - 1 ? x - 4 : x;
+        if (i % 2 === 0 || i === rows.length - 1) {
+          const anchor = i === rows.length - 1 ? 'end' : 'middle';
+          const tx = i === rows.length - 1 ? x - 4 : x;
           root.appendChild(svg('text', {x:tx, y:h-42, 'text-anchor':anchor, 'font-size':'10', fill:'#657386', transform:`rotate(-32 ${tx} ${h-42})`})).textContent = String(r.week_label).slice(5);
         }
       });
+      root.appendChild(svg('line', {x1:left+190, y1:15, x2:left+232, y2:15, stroke:colors.teal, 'stroke-width':3, 'stroke-linecap':'round'}));
+      root.appendChild(svg('text', {x:left+240, y:19, 'font-size':'11', fill:'#657386'})).textContent = currentTrendYear;
+      if (hasComparisonShape) {
+        root.appendChild(svg('line', {x1:left+292, y1:15, x2:left+334, y2:15, stroke:colors.amber, 'stroke-width':3, 'stroke-dasharray':'7 5', 'stroke-linecap':'round'}));
+        root.appendChild(svg('text', {x:left+342, y:19, 'font-size':'11', fill:'#657386'})).textContent = `${yoyTrendYear}同期`;
+      }
       root.appendChild(svg('text', {x:left, y:18, 'font-size':'12', fill:'#657386', 'font-weight':'700'})).textContent = '业务收入（万元）';
       root.appendChild(svg('text', {x:w-right, y:18, 'text-anchor':'end', 'font-size':'11', fill:'#657386'})).textContent = data.trend_note || '';
       el.innerHTML = '';
