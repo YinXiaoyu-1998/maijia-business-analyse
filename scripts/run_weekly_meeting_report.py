@@ -20,17 +20,35 @@ def main() -> None:
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--report", required=True, type=Path)
     parser.add_argument("--company", default="麦家小馆")
+    parser.add_argument("--current-start")
+    parser.add_argument("--current-end")
+    parser.add_argument("--previous-start")
+    parser.add_argument("--previous-end")
+    parser.add_argument("--yoy-start")
+    parser.add_argument("--yoy-end")
     args = parser.parse_args()
 
     script_dir = Path(__file__).resolve().parent
-    run([
+    profile_cmd = [
         sys.executable,
         str(script_dir / "profile_weekly_meeting_data.py"),
         "--input",
         *[str(path) for path in args.input],
         "--output-dir",
         str(args.output_dir),
-    ])
+    ]
+    for option in [
+        "current_start",
+        "current_end",
+        "previous_start",
+        "previous_end",
+        "yoy_start",
+        "yoy_end",
+    ]:
+        value = getattr(args, option)
+        if value:
+            profile_cmd.extend([f"--{option.replace('_', '-')}", value])
+    run(profile_cmd)
     run([
         sys.executable,
         str(script_dir / "generate_weekly_meeting_report_html.py"),

@@ -19,7 +19,7 @@ from zipfile import ZipFile
 CELL_RE = re.compile(r"([A-Z]+)(\d+)")
 DATE_RE = re.compile(r"^\d{4}[/\-]\d{1,2}[/\-]\d{1,2}$")
 
-TARGET_WINDOWS = {
+DEFAULT_TARGET_WINDOWS = {
     "current": ("本周", date(2026, 6, 14), date(2026, 6, 20)),
     "previous": ("环比周", date(2026, 6, 7), date(2026, 6, 13)),
     "yoy": ("同比周", date(2025, 6, 15), date(2025, 6, 21)),
@@ -207,10 +207,29 @@ def week_label(start: date) -> str:
     return f"{date_text(start)}-{date_text(end)}"
 
 
-def target_period_for(value: date) -> str | None:
-    for key, (_, start, end) in TARGET_WINDOWS.items():
+def build_trend_comparison_windows(target_windows: dict[str, tuple[str, date, date]]) -> list[tuple[str, str, int, date, date]]:
+    current_end = target_windows["current"][2]
+    yoy_end = target_windows["yoy"][2]
+    return [
+        ("prior_year", f"{yoy_end:%Y}同期", index + 1, yoy_end - timedelta(days=(15 - index) * 7 + 6), yoy_end - timedelta(days=(15 - index) * 7))
+        for index in range(16)
+    ] + [
+        ("current_year", f"{current_end:%Y}", index + 1, current_end - timedelta(days=(15 - index) * 7 + 6), current_end - timedelta(days=(15 - index) * 7))
+        for index in range(16)
+    ]
+
+
+def target_period_for(value: date, target_windows: dict[str, tuple[str, date, date]]) -> str | None:
+    for key, (_, start, end) in target_windows.items():
         if start <= value <= end:
             return key
+    return None
+
+
+def trend_comparison_window_for(value: date, trend_windows: list[tuple[str, str, int, date, date]]) -> tuple[str, str, int, date, date] | None:
+    for series_key, series_label, window_index, start, end in trend_windows:
+        if start <= value <= end:
+            return series_key, series_label, window_index, start, end
     return None
 
 
@@ -531,8 +550,9 @@ def classify_stores(comparison_rows: list[dict[str, Any]]) -> list[dict[str, Any
     return rows
 
 
-def profile(inputs: list[Path], output_dir: Path) -> dict[str, Any]:
+def profile(inputs: list[Path], output_dir: Path, target_windows: dict[str, tuple[str, date, date]]) -> dict[str, Any]:
     inspections = [inspect_workbook(path) for path in inputs]
+    trend_windows = build_trend_comparison_windows(target_windows)
     later_dates: list[set[date]] = []
     union_later: set[date] = set()
     for info in reversed(inspections):
@@ -544,6 +564,7 @@ def profile(inputs: list[Path], output_dir: Path) -> dict[str, Any]:
     weekly_store_channel: dict[tuple[Any, ...], dict[str, Any]] = defaultdict(new_agg)
     weekly_store_daypart: dict[tuple[Any, ...], dict[str, Any]] = defaultdict(new_agg)
     target_store_period: dict[tuple[Any, ...], dict[str, Any]] = defaultdict(new_agg)
+    trend_comparison_store: dict[tuple[Any, ...], dict[str, Any]] = defaultdict(new_agg)
     processed_dates: set[date] = set()
     skipped_duplicate_rows = 0
     skipped_summary_rows = 0
@@ -575,16 +596,28 @@ def profile(inputs: list[Path], output_dir: Path) -> dict[str, Any]:
 
             start = week_start_sunday(parsed_date)
             end = start + timedelta(days=6)
-            period_key = target_period_for(parsed_date)
+            period_key = target_period_for(parsed_date, target_windows)
+            trend_window = trend_comparison_window_for(parsed_date, trend_windows)
             processed_dates.add(parsed_date)
             processed_rows += 1
 
             weekly_key = (date_text(start), date_text(end), week_label(start)) + key_store
             add_to_agg(weekly_store[weekly_key], row, parsed_date)
 
-            target_name = TARGET_WINDOWS[period_key][0] if period_key else "其他周"
+            target_name = target_windows[period_key][0] if period_key else "其他周"
             if period_key:
-                add_to_agg(target_store_period[(period_key, TARGET_WINDOWS[period_key][0]) + key_store], row, parsed_date)
+                add_to_agg(target_store_period[(period_key, target_windows[period_key][0]) + key_store], row, parsed_date)
+            if trend_window:
+                series_key, series_label, window_index, trend_start, trend_end = trend_window
+                trend_key = (
+                    series_key,
+                    series_label,
+                    window_index,
+                    date_text(trend_start),
+                    date_text(trend_end),
+                    f"{trend_start:%m/%d}-{trend_end:%m/%d}",
+                ) + key_store
+                add_to_agg(trend_comparison_store[trend_key], row, parsed_date)
 
             for channel_name in ["店内", "外卖", "美团外卖", "饿了么外卖", "京东外卖"]:
                 channel_row = dict(row)
@@ -625,6 +658,10 @@ def profile(inputs: list[Path], output_dir: Path) -> dict[str, Any]:
     channel_rows = export_group(weekly_store_channel, ["week_start", "week_end", "week_label", "门店名称", "城市", "商户号", "period", "channel"])
     daypart_rows = export_group(weekly_store_daypart, ["week_start", "week_end", "week_label", "门店名称", "城市", "商户号", "period", "餐段", "时段"])
     target_rows = export_group(target_store_period, ["period_key", "period_label", "门店名称", "城市", "商户号"])
+    trend_comparison_rows = export_group(
+        trend_comparison_store,
+        ["series_key", "series_label", "window_index", "week_start", "week_end", "week_label", "门店名称", "城市", "商户号"],
+    )
 
     by_store_period = {
         (row["门店名称"], row["period_key"]): row
@@ -669,6 +706,11 @@ def profile(inputs: list[Path], output_dir: Path) -> dict[str, Any]:
     write_csv(output_dir / "weekly_store_metrics.csv", weekly_rows, ["week_start", "week_end", "week_label", "门店名称", "城市", "商户号"] + METRIC_FIELDS)
     write_csv(output_dir / "weekly_store_channel_metrics.csv", channel_rows, ["week_start", "week_end", "week_label", "门店名称", "城市", "商户号", "period", "channel"] + METRIC_FIELDS)
     write_csv(output_dir / "weekly_store_daypart_metrics.csv", daypart_rows, ["week_start", "week_end", "week_label", "门店名称", "城市", "商户号", "period", "餐段", "时段"] + METRIC_FIELDS)
+    write_csv(
+        output_dir / "weekly_trend_comparison_metrics.csv",
+        trend_comparison_rows,
+        ["series_key", "series_label", "window_index", "week_start", "week_end", "week_label", "门店名称", "城市", "商户号"] + METRIC_FIELDS,
+    )
 
     comparison_fields = ["门店名称"]
     for prefix in ["current", "previous", "yoy"]:
@@ -696,7 +738,7 @@ def profile(inputs: list[Path], output_dir: Path) -> dict[str, Any]:
             "coverage_end": date_text(max(processed_dates)) if processed_dates else None,
             "target_windows": {
                 key: {"label": label, "start": date_text(start), "end": date_text(end)}
-                for key, (label, start, end) in TARGET_WINDOWS.items()
+                for key, (label, start, end) in target_windows.items()
             },
             "processed_rows": processed_rows,
             "skipped_duplicate_rows": skipped_duplicate_rows,
@@ -706,6 +748,7 @@ def profile(inputs: list[Path], output_dir: Path) -> dict[str, Any]:
                 "weekly_store_metrics.csv",
                 "weekly_store_channel_metrics.csv",
                 "weekly_store_daypart_metrics.csv",
+                "weekly_trend_comparison_metrics.csv",
                 "weekly_store_comparison.csv",
                 "store_driver_summary.csv",
                 "star_problem_stores.csv",
@@ -718,6 +761,7 @@ def profile(inputs: list[Path], output_dir: Path) -> dict[str, Any]:
         "channel_current": [row for row in channel_rows if row.get("period") == "本周"],
         "daypart_current_previous": [row for row in daypart_rows if row.get("period") in {"本周", "环比周"}],
         "weekly_trend": weekly_rows,
+        "weekly_trend_comparison": trend_comparison_rows,
         "data_gaps": [
             "当前营业分组表没有网评分数、评论文本字段，不能做网评分数和词云分析。",
             "当前营业分组表没有档口、菜品、品项字段，不能做档口穿透归因。",
@@ -731,8 +775,19 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, nargs="+", type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument("--current-start", type=parse_date, default=DEFAULT_TARGET_WINDOWS["current"][1])
+    parser.add_argument("--current-end", type=parse_date, default=DEFAULT_TARGET_WINDOWS["current"][2])
+    parser.add_argument("--previous-start", type=parse_date, default=DEFAULT_TARGET_WINDOWS["previous"][1])
+    parser.add_argument("--previous-end", type=parse_date, default=DEFAULT_TARGET_WINDOWS["previous"][2])
+    parser.add_argument("--yoy-start", type=parse_date, default=DEFAULT_TARGET_WINDOWS["yoy"][1])
+    parser.add_argument("--yoy-end", type=parse_date, default=DEFAULT_TARGET_WINDOWS["yoy"][2])
     args = parser.parse_args()
-    summary = profile(args.input, args.output_dir)
+    target_windows = {
+        "current": ("本周", args.current_start, args.current_end),
+        "previous": ("环比周", args.previous_start, args.previous_end),
+        "yoy": ("同比周", args.yoy_start, args.yoy_end),
+    }
+    summary = profile(args.input, args.output_dir, target_windows)
     print(json.dumps({
         "coverage_start": summary["meta"]["coverage_start"],
         "coverage_end": summary["meta"]["coverage_end"],
