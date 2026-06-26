@@ -17,6 +17,8 @@ def run(cmd: list[str]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, nargs="+", type=Path)
+    parser.add_argument("--dish-input", nargs="+", type=Path)
+    parser.add_argument("--catalog", type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--report", required=True, type=Path)
     parser.add_argument("--company", default="麦家小馆")
@@ -37,6 +39,10 @@ def main() -> None:
         "--output-dir",
         str(args.output_dir),
     ]
+    if args.dish_input:
+        profile_cmd.extend(["--dish-input", *[str(path) for path in args.dish_input]])
+    if args.catalog:
+        profile_cmd.extend(["--catalog", str(args.catalog)])
     for option in [
         "current_start",
         "current_end",
