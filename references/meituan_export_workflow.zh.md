@@ -8,6 +8,18 @@
 - 如需 agent 操作浏览器，优先使用能复用用户登录态的浏览器控制工具。
 - 不要在对话或日志里暴露下载后的业务明细行；只报告文件路径、日期范围、行数和校验结果。
 
+## 文件命名规范
+
+所有从美团下载的原始 `.xlsx` 文件统一保存到 `documents/raw_exports/`。不要只保留美团自动生成的长文件名；下载后按以下规则重命名：
+
+| 数据类型 | 标准文件名 |
+|---|---|
+| 营业分组表 / 自助营业取数 | `maijia_business_YYYYMMDD_YYYYMMDD.xlsx` |
+| 菜品主题数据 / 自助菜品取数 | `maijia_dishes_YYYYMMDD_YYYYMMDD.xlsx` |
+| 菜品库基础信息 / 菜品导出 | `maijia_dish_catalog_YYYYMMDD.xlsx` |
+
+如果同一日期范围因为平台限制拆成多份，在扩展名前加分片号：`_part01`、`_part02`。例如 `maijia_business_20250301_20250620_part01.xlsx`。
+
 ## 操作步骤：营业分组表
 
 1. 打开 `https://pos.meituan.com/web/report/main#/rms-report/home`。
@@ -34,7 +46,7 @@
 
 ## 操作步骤：菜品主题数据
 
-当用户需要“菜品完整信息”“穿透到菜品”“菜品/档口归因”或需要文件名类似 `maijia_dishes.xlsx` 时，使用 `自助菜品取数`。不要用 `菜品成本毛利统计` 代替完整菜品数据。
+当用户需要“菜品完整信息”“穿透到菜品”“菜品/档口归因”或需要文件名类似 `maijia_dishes_YYYYMMDD_YYYYMMDD.xlsx` 时，使用 `自助菜品取数`。
 
 1. 打开 `https://pos.meituan.com/web/report/main#/rms-report/home`。
 2. 点击左侧导航 `自助取数`。
@@ -56,7 +68,7 @@
     - 用 `申请时间` / `更新时间` 核对是否是刚刚创建的任务。
     - 等待 `状态` 为 `导出完成`；如未完成，点击右上角 `刷新`。
 11. 点击该记录最右侧 `操作` 列里的 `下载`。
-12. 保存到工作区 `documents/` 目录，并按任务需要重命名，例如 `documents/maijia_dishes.xlsx`。
+12. 保存到 `documents/raw_exports/` 目录，并按文件命名规范重命名，例如 `documents/raw_exports/maijia_dishes_20260614_20260620.xlsx`。
 
 导出的 `自助菜品取数` Excel 常见结构：
 
@@ -81,7 +93,7 @@
 6. 在导出弹窗里选择 `导出菜品基础信息`。
 7. 选择 `全部字段`，确保导出包含 `基础分类`、`打印出品档口`、`出品部门`、`设置出品部门`、`预估成本` 等字段。
 8. 点击右下角 `确定`。
-9. 如果 macOS 出现保存弹窗，保存到工作区 `documents/` 目录，并按任务需要重命名，例如 `documents/maijia_dish_catalog.xlsx`。
+9. 如果 macOS 出现保存弹窗，保存到 `documents/raw_exports/` 目录，并按文件命名规范重命名，例如 `documents/raw_exports/maijia_dish_catalog_20260626.xlsx`。
 
 导出的菜品库 Excel 常见结构：
 
@@ -106,7 +118,7 @@
 ```bash
 python3 scripts/download_meituan_signed_url.py \
   --url '<signed-s3plus-url>' \
-  --output documents/maijia_business_analysis/raw_exports/maijia_business_data_YYYYMMDD_YYYYMMDD.xlsx
+  --output documents/raw_exports/maijia_business_YYYYMMDD_YYYYMMDD.xlsx
 ```
 
 3. 下载后校验：

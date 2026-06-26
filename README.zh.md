@@ -51,18 +51,30 @@ Use the skill at /path/to/maijia-business-analyse to analyze Meituan business da
 ```bash
 python3 scripts/download_meituan_signed_url.py \
   --url '<signed-s3plus-url>' \
-  --output documents/maijia_business_analysis/raw_exports/maijia_business_data_YYYYMMDD_YYYYMMDD.xlsx
+  --output documents/raw_exports/maijia_business_YYYYMMDD_YYYYMMDD.xlsx
 ```
 
-当需要菜品穿透、菜单归因或“穿透到菜品”时，使用同一参考文件里的 `自助取数 -> 自助菜品取数` 流程。展开筛选并全选字段组，导出后在 `下载清单记录` 中下载匹配的 `菜品主题数据(日期【...】)` 行，并保存为稳定路径，例如 `documents/maijia_dishes.xlsx`。
+### 原始下载文件命名
 
-当需要档口归因时，还需要从 `运营中心 -> 菜品管理 -> 菜品库 -> 菜品导出 -> 导出菜品基础信息` 导出菜品库。选择目标品牌，通常是 `麦家小馆`，选择全部字段，保存为稳定路径，例如 `documents/maijia_dish_catalog.xlsx`。在本分析口径里，`档口 = 基础分类`。
+所有从美团下载的原始文件统一保存到 `documents/raw_exports/`：
+
+| 导出类型 | 文件名 |
+|---|---|
+| `自助营业取数` / `营业分组表` | `maijia_business_YYYYMMDD_YYYYMMDD.xlsx` |
+| `自助菜品取数` / `菜品主题数据` | `maijia_dishes_YYYYMMDD_YYYYMMDD.xlsx` |
+| `菜品库` / `导出菜品基础信息` | `maijia_dish_catalog_YYYYMMDD.xlsx` |
+
+如果同一日期范围被拆成多个文件，在 `.xlsx` 前追加 `_part01`、`_part02`。
+
+当需要菜品穿透、菜单归因或“穿透到菜品”时，使用同一参考文件里的 `自助取数 -> 自助菜品取数` 流程。展开筛选并全选字段组，导出后在 `下载清单记录` 中下载匹配的 `菜品主题数据(日期【...】)` 行，并按标准命名保存，例如 `documents/raw_exports/maijia_dishes_20260614_20260620.xlsx`。
+
+当需要档口归因时，还需要从 `运营中心 -> 菜品管理 -> 菜品库 -> 菜品导出 -> 导出菜品基础信息` 导出菜品库。选择目标品牌，通常是 `麦家小馆`，选择全部字段，并按标准命名保存，例如 `documents/raw_exports/maijia_dish_catalog_20260626.xlsx`。在本分析口径里，`档口 = 基础分类`。
 
 ### 2. 一键生成事实表和 HTML 报告
 
 ```bash
 python3 scripts/run_pipeline.py \
-  --input documents/business_data.xlsx \
+  --input documents/raw_exports/maijia_business_YYYYMMDD_YYYYMMDD.xlsx \
   --output-dir documents/maijia_business_analysis \
   --report documents/maijia_business_analysis/maijia_business_diagnosis_report.html \
   --company 麦家小馆
@@ -72,14 +84,14 @@ python3 scripts/run_pipeline.py \
 
 ```bash
 python3 scripts/profile_business_data.py \
-  --input documents/business_data.xlsx \
+  --input documents/raw_exports/maijia_business_YYYYMMDD_YYYYMMDD.xlsx \
   --output-dir documents/maijia_business_analysis
 
 python3 scripts/generate_business_report_html.py \
   --input-dir documents/maijia_business_analysis \
   --output documents/maijia_business_analysis/maijia_business_diagnosis_report.html \
   --company 麦家小馆 \
-  --source-name business_data.xlsx
+  --source-name maijia_business_YYYYMMDD_YYYYMMDD.xlsx
 ```
 
 ## 输出文件

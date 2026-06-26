@@ -51,18 +51,30 @@ If Chrome blocks the temporary `s3plus.sankuai.com` URL, copy the signed URL and
 ```bash
 python3 scripts/download_meituan_signed_url.py \
   --url '<signed-s3plus-url>' \
-  --output documents/maijia_business_analysis/raw_exports/maijia_business_data_YYYYMMDD_YYYYMMDD.xlsx
+  --output documents/raw_exports/maijia_business_YYYYMMDD_YYYYMMDD.xlsx
 ```
 
-When dish-level penetration, menu attribution, or "穿透到菜品" is required, use the same reference file and fetch `自助取数 -> 自助菜品取数`. Select all field groups and download the matching `菜品主题数据(日期【...】)` row from `下载清单记录`, then save it with a stable path such as `documents/maijia_dishes.xlsx`.
+### Raw Export Naming
 
-When stall/档口 attribution is required, also export the dish catalog from `运营中心 -> 菜品管理 -> 菜品库 -> 菜品导出 -> 导出菜品基础信息`. Select the target brand, usually `麦家小馆`, choose all fields, and save it as a stable file such as `documents/maijia_dish_catalog.xlsx`. In this analysis workflow, `档口 = 基础分类`.
+Save all raw downloaded files under `documents/raw_exports/`:
+
+| Export | File name |
+|---|---|
+| `自助营业取数` / `营业分组表` | `maijia_business_YYYYMMDD_YYYYMMDD.xlsx` |
+| `自助菜品取数` / `菜品主题数据` | `maijia_dishes_YYYYMMDD_YYYYMMDD.xlsx` |
+| `菜品库` / `导出菜品基础信息` | `maijia_dish_catalog_YYYYMMDD.xlsx` |
+
+For split downloads, append `_part01`, `_part02`, etc. before `.xlsx`.
+
+When dish-level penetration, menu attribution, or "穿透到菜品" is required, use the same reference file and fetch `自助取数 -> 自助菜品取数`. Select all field groups and download the matching `菜品主题数据(日期【...】)` row from `下载清单记录`, then save it with the standard name such as `documents/raw_exports/maijia_dishes_20260614_20260620.xlsx`.
+
+When stall/档口 attribution is required, also export the dish catalog from `运营中心 -> 菜品管理 -> 菜品库 -> 菜品导出 -> 导出菜品基础信息`. Select the target brand, usually `麦家小馆`, choose all fields, and save it with the standard name such as `documents/raw_exports/maijia_dish_catalog_20260626.xlsx`. In this analysis workflow, `档口 = 基础分类`.
 
 ### 2. Run the Full Pipeline
 
 ```bash
 python3 scripts/run_pipeline.py \
-  --input documents/business_data.xlsx \
+  --input documents/raw_exports/maijia_business_YYYYMMDD_YYYYMMDD.xlsx \
   --output-dir documents/maijia_business_analysis \
   --report documents/maijia_business_analysis/maijia_business_diagnosis_report.html \
   --company 麦家小馆
@@ -72,14 +84,14 @@ python3 scripts/run_pipeline.py \
 
 ```bash
 python3 scripts/profile_business_data.py \
-  --input documents/business_data.xlsx \
+  --input documents/raw_exports/maijia_business_YYYYMMDD_YYYYMMDD.xlsx \
   --output-dir documents/maijia_business_analysis
 
 python3 scripts/generate_business_report_html.py \
   --input-dir documents/maijia_business_analysis \
   --output documents/maijia_business_analysis/maijia_business_diagnosis_report.html \
   --company 麦家小馆 \
-  --source-name business_data.xlsx
+  --source-name maijia_business_YYYYMMDD_YYYYMMDD.xlsx
 ```
 
 ## Outputs

@@ -45,11 +45,16 @@ For business operating facts, use `自助营业取数`:
 
 For relative date ranges, prefer complete business days. If today is `2026-06-14` and the user asks for “过去七天”, use `2026/06/07-2026/06/13` unless they explicitly want partial current-day data.
 
-When the analysis needs dish-level detail, menu penetration, or attribution that cannot be answered by `营业分组表`, fetch a second export with `自助取数 -> 自助菜品取数`. Select all field groups, query, export, and download the matching `菜品主题数据(日期【...】)` row from `下载清单`. Save it with a stable name such as `documents/maijia_dishes.xlsx`. Use the `maijia-menu-analyse` skill for detailed dish-data handling.
+Save all raw downloaded files under `documents/raw_exports/` with these names:
 
-Do not substitute `菜品成本毛利统计` for complete dish information. That report is only suitable when the task specifically needs the cost/gross-profit workbook and its required fields.
+- Business operating export: `maijia_business_YYYYMMDD_YYYYMMDD.xlsx`
+- Dish sales export: `maijia_dishes_YYYYMMDD_YYYYMMDD.xlsx`
+- Dish catalog export: `maijia_dish_catalog_YYYYMMDD.xlsx`
+- If a date range is split across multiple exports, append `_part01`, `_part02`, etc. before `.xlsx`.
 
-When the analysis needs stall/档口 attribution, fetch the dish catalog dimension from `运营中心 -> 菜品管理 -> 菜品库`. Select the target brand, usually `麦家小馆`, click `菜品导出`, choose `导出菜品基础信息`, select all fields, confirm, and save the result with a stable name such as `documents/maijia_dish_catalog.xlsx`.
+When the analysis needs dish-level detail, menu penetration, or attribution that cannot be answered by `营业分组表`, fetch a second export with `自助取数 -> 自助菜品取数`. Select all field groups, query, export, and download the matching `菜品主题数据(日期【...】)` row from `下载清单`. Save it as `documents/raw_exports/maijia_dishes_YYYYMMDD_YYYYMMDD.xlsx`. Use the `maijia-menu-analyse` skill for detailed dish-data handling.
+
+When the analysis needs stall/档口 attribution, fetch the dish catalog dimension from `运营中心 -> 菜品管理 -> 菜品库`. Select the target brand, usually `麦家小馆`, click `菜品导出`, choose `导出菜品基础信息`, select all fields, confirm, and save the result as `documents/raw_exports/maijia_dish_catalog_YYYYMMDD.xlsx`.
 
 In Maijia operating analysis, `档口 = 基础分类`. Use the `基础分类` column from the catalog sheet `总部菜品` as the management stall grouping. Treat `打印出品档口`, `出品部门`, and `设置出品部门` as production-routing fields unless the user explicitly asks for kitchen routing.
 
@@ -75,7 +80,7 @@ Run the full pipeline:
 
 ```bash
 python3 maijia-business-analyse/scripts/run_pipeline.py \
-  --input documents/business_data.xlsx \
+  --input documents/raw_exports/maijia_business_YYYYMMDD_YYYYMMDD.xlsx \
   --output-dir documents/maijia_business_analysis \
   --report documents/maijia_business_analysis/maijia_business_diagnosis_report.html \
   --company 麦家小馆
@@ -85,14 +90,14 @@ Or run individual steps:
 
 ```bash
 python3 maijia-business-analyse/scripts/profile_business_data.py \
-  --input documents/business_data.xlsx \
+  --input documents/raw_exports/maijia_business_YYYYMMDD_YYYYMMDD.xlsx \
   --output-dir documents/maijia_business_analysis
 
 python3 maijia-business-analyse/scripts/generate_business_report_html.py \
   --input-dir documents/maijia_business_analysis \
   --output documents/maijia_business_analysis/maijia_business_diagnosis_report.html \
   --company 麦家小馆 \
-  --source-name business_data.xlsx
+  --source-name maijia_business_YYYYMMDD_YYYYMMDD.xlsx
 ```
 
 Expected fact tables:
