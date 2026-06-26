@@ -74,6 +74,8 @@ Preferred joins:
 
 With these sources, a weekly meeting report can drill from `门店 -> 周 -> 渠道/餐段 -> 档口(基础分类) -> 菜品/规格`, and can attribute store revenue changes to specific stall categories before drilling into individual dishes.
 
+For full weekly meeting attribution, the `自助菜品取数` export must cover all comparison windows used by the report: current week, previous week, and year-over-year week. If it only covers the current week, the report may show current stall structure but cannot claim stall-level WoW/YoY drivers.
+
 ## Analysis Pipeline
 
 Run the full pipeline:
@@ -100,6 +102,26 @@ python3 maijia-business-analyse/scripts/generate_business_report_html.py \
   --source-name maijia_business_YYYYMMDD_YYYYMMDD.xlsx
 ```
 
+For the weekly meeting report with stall and dish attribution, run:
+
+```bash
+python3 maijia-business-analyse/scripts/run_weekly_meeting_report.py \
+  --input documents/raw_exports/maijia_business_YYYYMMDD_YYYYMMDD.xlsx \
+  --dish-input documents/raw_exports/maijia_dishes_YYYYMMDD_YYYYMMDD.xlsx \
+  --catalog documents/raw_exports/maijia_dish_catalog_YYYYMMDD.xlsx \
+  --output-dir documents/maijia_weekly_meeting_analysis \
+  --report documents/maijia_weekly_meeting_analysis/maijia_weekly_meeting_report.html \
+  --company 麦家小馆 \
+  --current-start YYYY/MM/DD \
+  --current-end YYYY/MM/DD \
+  --previous-start YYYY/MM/DD \
+  --previous-end YYYY/MM/DD \
+  --yoy-start YYYY/MM/DD \
+  --yoy-end YYYY/MM/DD
+```
+
+When `--dish-input` and `--catalog` are omitted, the weekly report remains backward-compatible and omits stall attribution.
+
 Expected fact tables:
 
 - `analysis_summary.json`
@@ -109,6 +131,21 @@ Expected fact tables:
 - `daypart_summary.csv`
 - `member_summary.csv`
 - `store_daypart_summary.csv`
+
+Weekly meeting fact tables:
+
+- `weekly_store_metrics.csv`
+- `weekly_store_channel_metrics.csv`
+- `weekly_store_daypart_metrics.csv`
+- `weekly_trend_comparison_metrics.csv`
+- `weekly_store_comparison.csv`
+- `store_driver_summary.csv`
+- `star_problem_stores.csv`
+- `weekly_store_stall_metrics.csv` when dish and catalog inputs are available
+- `weekly_store_stall_comparison.csv` when dish and catalog inputs are available
+- `weekly_store_stall_driver_summary.csv` when dish and catalog inputs are available
+- `weekly_store_stall_dish_drivers.csv` when dish and catalog inputs are available
+- `dish_catalog_match_summary.csv` when dish and catalog inputs are available
 
 ## Report Drafting
 
