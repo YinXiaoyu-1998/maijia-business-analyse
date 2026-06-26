@@ -50,6 +50,17 @@ For business operating facts, use `自助营业取数`:
 5. Query, export, go to `下载清单`, and download the matching completed row.
 6. If Chrome blocks the `s3plus.sankuai.com` temporary URL, use `scripts/download_meituan_signed_url.py`.
 
+For weekly meeting reports, the business operating export must be a long-period `营业分组表`, not only a short current-week export. The long-period export must cover every business date needed by the full weekly HTML, including:
+
+- the current week requested by the user;
+- the previous comparison week;
+- the year-over-year comparison week;
+- the full trend window shown by the report, normally the recent 16 complete weekly buckets for the current year and the aligned prior-year period.
+
+Prefer one or more long-period `营业分组表` exports that together cover the full current-year and prior-year trend windows. Let `profile_weekly_meeting_data.py` aggregate the current week, previous week, YoY week, and trend buckets from those long-period inputs. Do not shrink the business inputs to only current/previous/YoY week slices, because that breaks the 16-week trend section.
+
+If a precise current-week export is also available, use it only for validation or as a replacement after removing the overlapping current-week rows from the long-period input. Never solve duplicate-count risk by discarding non-overlapping trend weeks. When in doubt, keep the long-period export as the source of truth and derive the current week from it.
+
 For relative date ranges, prefer complete business days. If today is `2026-06-14` and the user asks for “过去七天”, use `2026/06/07-2026/06/13` unless they explicitly want partial current-day data.
 
 Save all raw downloaded files under `documents/raw_exports/` with these names:
@@ -89,6 +100,10 @@ When the user asks for a weekly report, weekly meeting report, 周报, 周会 HT
 
 Do not create a one-off baseline/ad hoc report for these requests. Do not use or imitate historical outputs under `documents/maijia_weekly_baseline_analysis/`, filenames like `maijia_weekly_baseline_report_*.html`, or screenshots named `maijia_weekly_baseline_report_*.png`. Those are historical temporary artifacts, not the current reporting standard.
 
+For weekly reports, require long-period business inputs. The `--input` files must include `营业分组表` coverage for the report's complete 16-week current-year trend window and aligned prior-year trend window, plus the requested current/previous/YoY comparison windows. The current week should be derived from the long-period business input whenever possible. Do not use only three short exports for current week, previous week, and YoY week as the business input set; that may make comparison tables look complete while leaving the "最近 16 周收入趋势" chart mostly empty.
+
+If overlapping business exports must be combined, remove or exclude only the duplicated date range before profiling. Do not cut away unrelated dates that are needed for trend charts. Prefer complete long-period coverage over short-window convenience, even when the long file is large; the profiling scripts are designed to stream large workbooks.
+
 If dish and catalog files are available, pass `--dish-input` and `--catalog` so stall attribution is added to the existing full weekly HTML. If they are not available, still run the full weekly pipeline without those flags and state that stall attribution is omitted due to missing inputs.
 
 ## Analysis Pipeline
@@ -121,7 +136,8 @@ For the weekly meeting report with stall and dish attribution, run:
 
 ```bash
 python3 maijia-business-analyse/scripts/run_weekly_meeting_report.py \
-  --input documents/raw_exports/maijia_business_YYYYMMDD_YYYYMMDD.xlsx \
+  --input documents/raw_exports/maijia_business_CURRENT_TREND_START_CURRENT_END.xlsx \
+          documents/raw_exports/maijia_business_YOY_TREND_START_YOY_END.xlsx \
   --dish-input documents/raw_exports/maijia_dishes_YYYYMMDD_YYYYMMDD.xlsx \
   --catalog documents/raw_exports/maijia_dish_catalog_YYYYMMDD.xlsx \
   --output-dir documents/maijia_weekly_meeting_analysis \
