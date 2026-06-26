@@ -17,7 +17,7 @@ from zipfile import ZipFile
 
 
 CELL_RE = re.compile(r"([A-Z]+)(\d+)")
-DATE_RE = re.compile(r"^\d{4}[/\-]\d{1,2}[/\-]\d{1,2}$")
+DATE_RE = re.compile(r"^(\d{4}[/\-]\d{1,2}[/\-]\d{1,2}|\d{8})$")
 
 DEFAULT_TARGET_WINDOWS = {
     "current": ("本周", date(2026, 6, 14), date(2026, 6, 20)),
@@ -52,6 +52,17 @@ REQUIRED_COLUMNS = [
     "开台率",
     "翻台率",
     "桌台数x营业天数",
+]
+
+DISH_REQUIRED_COLUMNS = [
+    "营业日",
+    "门店",
+    "菜品名称",
+    "订单分类",
+    "菜品销售数量",
+    "菜品销售额",
+    "菜品收入",
+    "菜品关联正向订单量",
 ]
 
 ADD_FIELDS = {
@@ -116,6 +127,68 @@ METRIC_FIELDS = [
     "jd_delivery_revenue",
     "member_revenue",
     "member_revenue_share",
+]
+
+DISH_ADD_FIELDS = {
+    "quantity": "菜品销售数量",
+    "sales": "菜品销售额",
+    "income": "菜品收入",
+    "discount": "菜品优惠",
+    "gross_sales": "菜品总销售额",
+    "gross_income": "菜品总收入",
+    "gross_discount": "菜品总优惠",
+    "positive_orders": "菜品关联正向订单量",
+    "refund_quantity": "退菜数量",
+    "refund_amount": "退菜金额",
+    "serving_orders": "出餐订单数",
+    "gross_margin_after": "菜品总毛利额（折后）",
+}
+
+DISH_METRIC_FIELDS = [
+    "rows",
+    "active_days",
+    "quantity",
+    "sales",
+    "income",
+    "discount",
+    "gross_sales",
+    "gross_income",
+    "gross_discount",
+    "positive_orders",
+    "refund_quantity",
+    "refund_amount",
+    "serving_orders",
+    "gross_margin_after",
+    "avg_income_per_item",
+    "refund_rate_by_qty",
+]
+
+DISH_DRIVER_SUMMARY_FIELDS = [
+    "门店名称",
+    "basis",
+    "top_negative_stall",
+    "top_negative_income_delta",
+    "top_negative_income_pct",
+    "top_positive_stall",
+    "top_positive_income_delta",
+    "top_positive_income_pct",
+    "stall_signal",
+]
+
+DISH_DRIVER_DETAIL_FIELDS = [
+    "门店名称",
+    "basis",
+    "direction",
+    "档口",
+    "菜品名称",
+    "channel",
+    "current_income",
+    "baseline_income",
+    "income_delta",
+    "income_pct",
+    "current_quantity",
+    "baseline_quantity",
+    "quantity_delta",
 ]
 
 
@@ -188,6 +261,8 @@ def parse_date(value: str) -> date | None:
     if not DATE_RE.match(text):
         return None
     text = text.replace("-", "/")
+    if "/" not in text and len(text) == 8:
+        text = f"{text[:4]}/{text[4:6]}/{text[6:8]}"
     try:
         return datetime.strptime(text, "%Y/%m/%d").date()
     except ValueError:
@@ -236,7 +311,7 @@ def trend_comparison_window_for(value: date, trend_windows: list[tuple[str, str,
 def safe_float(value: Any) -> float:
     if value is None:
         return 0.0
-    text = str(value).strip().replace(",", "")
+    text = str(value).strip().replace(",", "").replace("元", "")
     if text in {"", "--", "null", "None", "合计"}:
         return 0.0
     if text.endswith("%"):
@@ -280,6 +355,16 @@ def new_agg() -> dict[str, Any]:
         "open_weight": 0.0,
         "turnover_weight": 0.0,
     }
+
+
+def normalize_name(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    text = text.replace("（", "(").replace("）", ")")
+    return re.sub(r"\s+", "", text)
+
+
+def strip_channel_prefix(value: Any) -> str:
+    return re.sub(r"^【[^】]{1,12}】", "", normalize_name(value))
 
 
 def add_to_agg(agg: dict[str, Any], row: dict[str, str], row_date: date) -> None:
@@ -338,10 +423,10 @@ def derive(agg: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def read_workbook_rows(path: Path) -> Iterable[tuple[int, dict[int, str]]]:
+def read_workbook_rows(path: Path, sheet_index: int = 1) -> Iterable[tuple[int, dict[int, str]]]:
     with ZipFile(path) as zf:
         shared_strings = load_shared_strings(zf)
-        with zf.open("xl/worksheets/sheet1.xml") as handle:
+        with zf.open(f"xl/worksheets/sheet{sheet_index}.xml") as handle:
             for _, elem in iterparse(handle, events=("end",)):
                 if not is_tag(elem, "row"):
                     continue
@@ -381,6 +466,144 @@ def inspect_workbook(path: Path) -> dict[str, Any]:
         "min_date": min(dates) if dates else None,
         "max_date": max(dates) if dates else None,
     }
+
+
+def inspect_dish_workbook(path: Path) -> dict[str, Any]:
+    title = ""
+    filters = ""
+    headers: list[str] = []
+    dates: set[date] = set()
+    for row_number, values in read_workbook_rows(path):
+        if row_number == 1:
+            title = values.get(1, "")
+        elif row_number == 2:
+            filters = values.get(1, "")
+        elif row_number == 3:
+            headers = [values.get(index, "") for index in range(1, max(values) + 1)]
+            missing = [field for field in DISH_REQUIRED_COLUMNS if field not in headers]
+            if title != "菜品主题数据":
+                raise ValueError(f"{path} is not 菜品主题数据: {title}")
+            if missing:
+                raise ValueError(f"{path} missing required dish columns: {missing}")
+        elif row_number >= 4 and headers:
+            row = row_dict(headers, values)
+            parsed = parse_date(row.get("营业日", ""))
+            if parsed:
+                dates.add(parsed)
+    return {
+        "path": str(path),
+        "title": title,
+        "filters": filters,
+        "header_count": len(headers),
+        "dates": sorted(dates),
+        "min_date": min(dates) if dates else None,
+        "max_date": max(dates) if dates else None,
+    }
+
+
+def load_catalog(path: Path) -> dict[str, Any]:
+    title = ""
+    filters = ""
+    headers: list[str] = []
+    by_name: dict[str, set[str]] = defaultdict(set)
+    by_clean_name: dict[str, set[str]] = defaultdict(set)
+    stalls: dict[str, int] = defaultdict(int)
+    rows = 0
+    for row_number, values in read_workbook_rows(path, sheet_index=1):
+        if row_number == 1:
+            title = values.get(1, "")
+        elif row_number == 2:
+            filters = values.get(1, "")
+        elif row_number == 3:
+            headers = [values.get(index, "") for index in range(1, max(values) + 1)]
+            missing = [field for field in ["菜品名称", "基础分类"] if field not in headers]
+            if missing:
+                raise ValueError(f"{path} missing required catalog columns: {missing}")
+        elif row_number >= 4 and headers:
+            row = row_dict(headers, values)
+            name = row.get("菜品名称", "")
+            if not name:
+                continue
+            stall = row.get("基础分类", "") or "未分类"
+            rows += 1
+            stalls[stall] += 1
+            by_name[normalize_name(name)].add(stall)
+            by_clean_name[strip_channel_prefix(name)].add(stall)
+    return {
+        "path": str(path),
+        "title": title,
+        "filters": filters,
+        "rows": rows,
+        "stall_count": len(stalls),
+        "stalls": dict(stalls),
+        "by_name": by_name,
+        "by_clean_name": by_clean_name,
+        "package_sheet_policy": "总部套餐未拆解；套餐销售按菜品主题数据原始菜品名称保留。",
+    }
+
+
+def resolve_stall(dish_name: str, catalog: dict[str, Any]) -> tuple[str, str]:
+    candidates = catalog["by_name"].get(normalize_name(dish_name))
+    if not candidates:
+        candidates = catalog["by_clean_name"].get(strip_channel_prefix(dish_name))
+    if not candidates:
+        return "未匹配菜品库", "unmatched"
+    if len(candidates) > 1:
+        return "重名/多分类", "ambiguous"
+    return next(iter(candidates)), "matched"
+
+
+def new_dish_agg() -> dict[str, Any]:
+    return {
+        "rows": 0,
+        "dates": set(),
+        "sums": defaultdict(float),
+    }
+
+
+def add_to_dish_agg(agg: dict[str, Any], row: dict[str, str], row_date: date) -> None:
+    agg["rows"] += 1
+    agg["dates"].add(row_date)
+    for out_name, source_name in DISH_ADD_FIELDS.items():
+        agg["sums"][out_name] += safe_float(row.get(source_name))
+
+
+def derive_dish(agg: dict[str, Any]) -> dict[str, Any]:
+    sums = agg["sums"]
+    return {
+        "rows": agg["rows"],
+        "active_days": len(agg["dates"]),
+        **{key: fmt(sums[key], 2) for key in DISH_ADD_FIELDS},
+        "avg_income_per_item": fmt(safe_div(sums["income"], sums["quantity"]), 2),
+        "refund_rate_by_qty": fmt(safe_div(sums["refund_quantity"], sums["quantity"]), 4),
+    }
+
+
+def export_dish_group(groups: dict[tuple[Any, ...], dict[str, Any]], key_fields: list[str]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for key, agg in groups.items():
+        row = {field: key[index] for index, field in enumerate(key_fields)}
+        row.update(derive_dish(agg))
+        rows.append(row)
+    rows.sort(key=lambda item: tuple(str(item.get(field, "")) for field in key_fields))
+    return rows
+
+
+def dish_metric(row: dict[str, Any] | None, name: str) -> float | None:
+    if not row:
+        return None
+    value = row.get(name)
+    if value is None or value == "":
+        return None
+    return float(value)
+
+
+def dish_diff(current: dict[str, Any] | None, baseline: dict[str, Any] | None, name: str) -> tuple[float | None, float | None]:
+    current_value = dish_metric(current, name)
+    baseline_value = dish_metric(baseline, name)
+    if current_value is None or baseline_value is None:
+        return None, None
+    return fmt(current_value - baseline_value, 4), fmt(pct_change(current_value, baseline_value), 4)
 
 
 def row_dict(headers: list[str], values: dict[int, str]) -> dict[str, str]:
@@ -550,7 +773,255 @@ def classify_stores(comparison_rows: list[dict[str, Any]]) -> list[dict[str, Any
     return rows
 
 
-def profile(inputs: list[Path], output_dir: Path, target_windows: dict[str, tuple[str, date, date]]) -> dict[str, Any]:
+def compare_store_stalls(target_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_key = {
+        (row["门店名称"], row["档口"], row["period_key"]): row
+        for row in target_rows
+    }
+    keys = sorted({(row["门店名称"], row["档口"]) for row in target_rows})
+    comparison_rows: list[dict[str, Any]] = []
+    for store, stall in keys:
+        current = by_key.get((store, stall, "current"))
+        previous = by_key.get((store, stall, "previous"))
+        yoy = by_key.get((store, stall, "yoy"))
+        row: dict[str, Any] = {"门店名称": store, "档口": stall}
+        for label, source in [("current", current), ("previous", previous), ("yoy", yoy)]:
+            for field in DISH_METRIC_FIELDS:
+                row[f"{label}_{field}"] = source.get(field) if source else None
+        for prefix, baseline in [("wow", previous), ("yoy", yoy)]:
+            for field in ["income", "quantity", "positive_orders", "discount", "refund_amount"]:
+                delta, pct = dish_diff(current, baseline, field)
+                row[f"{prefix}_{field}_delta"] = delta
+                row[f"{prefix}_{field}_pct"] = pct
+        comparison_rows.append(row)
+    comparison_rows.sort(key=lambda row: (row["门店名称"], -(row.get("current_income") or 0)))
+    return comparison_rows
+
+
+def store_stall_driver_rows(comparison_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    stores = sorted({str(row.get("门店名称") or "") for row in comparison_rows if row.get("门店名称")})
+    for store in stores:
+        store_rows = [row for row in comparison_rows if row.get("门店名称") == store]
+        for basis, prefix in [("环比", "wow"), ("同比", "yoy")]:
+            comparable = [row for row in store_rows if row.get(f"{prefix}_income_delta") not in {None, ""}]
+            negative = sorted(comparable, key=lambda row: float(row.get(f"{prefix}_income_delta") or 0))
+            positive = sorted(comparable, key=lambda row: float(row.get(f"{prefix}_income_delta") or 0), reverse=True)
+            top_neg = negative[0] if negative and float(negative[0].get(f"{prefix}_income_delta") or 0) < 0 else None
+            top_pos = positive[0] if positive and float(positive[0].get(f"{prefix}_income_delta") or 0) > 0 else None
+            signal_parts = []
+            if top_neg:
+                signal_parts.append(f"{top_neg['档口']} {float(top_neg.get(f'{prefix}_income_delta') or 0):,.0f}")
+            if top_pos:
+                signal_parts.append(f"{top_pos['档口']} +{float(top_pos.get(f'{prefix}_income_delta') or 0):,.0f}")
+            rows.append({
+                "门店名称": store,
+                "basis": basis,
+                "top_negative_stall": top_neg.get("档口") if top_neg else "",
+                "top_negative_income_delta": top_neg.get(f"{prefix}_income_delta") if top_neg else None,
+                "top_negative_income_pct": top_neg.get(f"{prefix}_income_pct") if top_neg else None,
+                "top_positive_stall": top_pos.get("档口") if top_pos else "",
+                "top_positive_income_delta": top_pos.get(f"{prefix}_income_delta") if top_pos else None,
+                "top_positive_income_pct": top_pos.get(f"{prefix}_income_pct") if top_pos else None,
+                "stall_signal": " / ".join(signal_parts) if signal_parts else "无明显档口变化",
+            })
+    return rows
+
+
+def dish_driver_rows(
+    dish_target_rows: list[dict[str, Any]],
+    stall_driver_summary: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    by_key = {
+        (row["门店名称"], row["档口"], row["菜品名称"], row["channel"], row["period_key"]): row
+        for row in dish_target_rows
+    }
+    focus = set()
+    for row in stall_driver_summary:
+        for direction, field in [("negative", "top_negative_stall"), ("positive", "top_positive_stall")]:
+            stall = row.get(field)
+            if stall:
+                focus.add((row["门店名称"], row["basis"], direction, stall))
+
+    rows: list[dict[str, Any]] = []
+    for store, basis, direction, stall in sorted(focus):
+        prefix = "wow" if basis == "环比" else "yoy"
+        baseline_key = "previous" if basis == "环比" else "yoy"
+        dish_keys = sorted({
+            (dish_store, dish_stall, dish_name, channel)
+            for dish_store, dish_stall, dish_name, channel, period_key in by_key
+            if dish_store == store and dish_stall == stall and period_key in {"current", baseline_key}
+        })
+        candidates: list[dict[str, Any]] = []
+        for dish_store, dish_stall, dish_name, channel in dish_keys:
+            current = by_key.get((dish_store, dish_stall, dish_name, channel, "current"))
+            baseline = by_key.get((dish_store, dish_stall, dish_name, channel, baseline_key))
+            income_delta, income_pct = dish_diff(current, baseline, "income")
+            quantity_delta, _ = dish_diff(current, baseline, "quantity")
+            if income_delta is None:
+                continue
+            candidates.append({
+                "门店名称": store,
+                "basis": basis,
+                "direction": direction,
+                "档口": stall,
+                "菜品名称": dish_name,
+                "channel": channel,
+                "current_income": dish_metric(current, "income"),
+                "baseline_income": dish_metric(baseline, "income"),
+                "income_delta": fmt(income_delta, 2),
+                "income_pct": fmt(income_pct, 4),
+                "current_quantity": dish_metric(current, "quantity"),
+                "baseline_quantity": dish_metric(baseline, "quantity"),
+                "quantity_delta": fmt(quantity_delta, 2),
+            })
+        candidates.sort(key=lambda item: item["income_delta"], reverse=(direction == "positive"))
+        rows.extend(candidates[:5])
+    return rows
+
+
+def profile_dish_inputs(
+    dish_inputs: list[Path],
+    catalog_path: Path,
+    output_dir: Path,
+    target_windows: dict[str, tuple[str, date, date]],
+) -> dict[str, Any]:
+    catalog = load_catalog(catalog_path)
+    inspections = [inspect_dish_workbook(path) for path in dish_inputs]
+    later_dates: list[set[date]] = []
+    union_later: set[date] = set()
+    for info in reversed(inspections):
+        later_dates.append(set(union_later))
+        union_later.update(info["dates"])
+    later_dates = list(reversed(later_dates))
+
+    store_stall_period: dict[tuple[Any, ...], dict[str, Any]] = defaultdict(new_dish_agg)
+    store_stall_dish_period: dict[tuple[Any, ...], dict[str, Any]] = defaultdict(new_dish_agg)
+    match_counts: dict[str, int] = defaultdict(int)
+    period_counts: dict[str, int] = defaultdict(int)
+    period_dates: dict[str, set[date]] = defaultdict(set)
+    processed_dates: set[date] = set()
+    processed_rows = 0
+    skipped_duplicate_rows = 0
+    skipped_out_of_scope_rows = 0
+
+    for index, path in enumerate(dish_inputs):
+        excluded_dates = later_dates[index]
+        headers: list[str] = []
+        for row_number, values in read_workbook_rows(path):
+            if row_number == 3:
+                headers = [values.get(col, "") for col in range(1, max(values) + 1)]
+                continue
+            if row_number < 4 or not headers or not values:
+                continue
+            row = row_dict(headers, values)
+            parsed_date = parse_date(row.get("营业日", ""))
+            if not parsed_date:
+                continue
+            if parsed_date in excluded_dates:
+                skipped_duplicate_rows += 1
+                continue
+            period_key = target_period_for(parsed_date, target_windows)
+            if not period_key:
+                skipped_out_of_scope_rows += 1
+                continue
+
+            store = row.get("门店", "") or "未知门店"
+            dish_name = row.get("菜品名称", "") or "未知菜品"
+            channel = row.get("订单分类", "") or "未知渠道"
+            stall, match_status = resolve_stall(dish_name, catalog)
+            match_counts[match_status] += 1
+            processed_dates.add(parsed_date)
+            period_counts[period_key] += 1
+            period_dates[period_key].add(parsed_date)
+            processed_rows += 1
+            period_label = target_windows[period_key][0]
+
+            add_to_dish_agg(store_stall_period[(period_key, period_label, store, stall)], row, parsed_date)
+            add_to_dish_agg(store_stall_dish_period[(period_key, period_label, store, stall, dish_name, channel)], row, parsed_date)
+
+    target_rows = export_dish_group(store_stall_period, ["period_key", "period_label", "门店名称", "档口"])
+    dish_target_rows = export_dish_group(store_stall_dish_period, ["period_key", "period_label", "门店名称", "档口", "菜品名称", "channel"])
+    comparison_rows = compare_store_stalls(target_rows)
+    driver_rows = store_stall_driver_rows(comparison_rows)
+    dish_drivers = dish_driver_rows(dish_target_rows, driver_rows)
+    total_matches = sum(match_counts.values())
+    matched = match_counts.get("matched", 0)
+    match_rate = safe_div(matched, total_matches) or 0
+
+    write_csv(output_dir / "weekly_store_stall_metrics.csv", target_rows, ["period_key", "period_label", "门店名称", "档口"] + DISH_METRIC_FIELDS)
+    comparison_fields = ["门店名称", "档口"]
+    for prefix in ["current", "previous", "yoy"]:
+        comparison_fields.extend([f"{prefix}_{field}" for field in DISH_METRIC_FIELDS])
+    for prefix in ["wow", "yoy"]:
+        for field in ["income", "quantity", "positive_orders", "discount", "refund_amount"]:
+            comparison_fields.extend([f"{prefix}_{field}_delta", f"{prefix}_{field}_pct"])
+    write_csv(output_dir / "weekly_store_stall_comparison.csv", comparison_rows, comparison_fields)
+    write_csv(output_dir / "weekly_store_stall_driver_summary.csv", driver_rows, DISH_DRIVER_SUMMARY_FIELDS)
+    write_csv(output_dir / "weekly_store_stall_dish_drivers.csv", dish_drivers, DISH_DRIVER_DETAIL_FIELDS)
+    match_rows = [
+        {"metric": "processed_rows", "value": processed_rows},
+        {"metric": "matched_rows", "value": matched},
+        {"metric": "unmatched_rows", "value": match_counts.get("unmatched", 0)},
+        {"metric": "ambiguous_rows", "value": match_counts.get("ambiguous", 0)},
+        {"metric": "match_rate", "value": fmt(match_rate, 4)},
+        {"metric": "catalog_rows", "value": catalog["rows"]},
+        {"metric": "catalog_stall_count", "value": catalog["stall_count"]},
+        {"metric": "skipped_duplicate_rows", "value": skipped_duplicate_rows},
+        {"metric": "skipped_out_of_scope_rows", "value": skipped_out_of_scope_rows},
+    ]
+    write_csv(output_dir / "dish_catalog_match_summary.csv", match_rows, ["metric", "value"])
+
+    return {
+        "enabled": True,
+        "inputs": [
+            {
+                "path": info["path"],
+                "title": info["title"],
+                "header_count": info["header_count"],
+                "min_date": date_text(info["min_date"]) if info["min_date"] else None,
+                "max_date": date_text(info["max_date"]) if info["max_date"] else None,
+            }
+            for info in inspections
+        ],
+        "catalog": {
+            "path": catalog["path"],
+            "title": catalog["title"],
+            "rows": catalog["rows"],
+            "stall_count": catalog["stall_count"],
+            "package_sheet_policy": catalog["package_sheet_policy"],
+        },
+        "processed_rows": processed_rows,
+        "processed_date_start": date_text(min(processed_dates)) if processed_dates else None,
+        "processed_date_end": date_text(max(processed_dates)) if processed_dates else None,
+        "period_coverage": {
+            key: {
+                "label": label,
+                "rows": period_counts.get(key, 0),
+                "date_start": date_text(min(period_dates[key])) if period_dates.get(key) else None,
+                "date_end": date_text(max(period_dates[key])) if period_dates.get(key) else None,
+            }
+            for key, (label, _start, _end) in target_windows.items()
+        },
+        "match_counts": dict(match_counts),
+        "match_rate": fmt(match_rate, 4),
+        "outputs": [
+            "weekly_store_stall_metrics.csv",
+            "weekly_store_stall_comparison.csv",
+            "weekly_store_stall_driver_summary.csv",
+            "weekly_store_stall_dish_drivers.csv",
+            "dish_catalog_match_summary.csv",
+        ],
+    }
+
+
+def profile(
+    inputs: list[Path],
+    output_dir: Path,
+    target_windows: dict[str, tuple[str, date, date]],
+    dish_inputs: list[Path] | None = None,
+    catalog_path: Path | None = None,
+) -> dict[str, Any]:
     inspections = [inspect_workbook(path) for path in inputs]
     trend_windows = build_trend_comparison_windows(target_windows)
     later_dates: list[set[date]] = []
@@ -722,6 +1193,27 @@ def profile(inputs: list[Path], output_dir: Path, target_windows: dict[str, tupl
     write_csv(output_dir / "store_driver_summary.csv", driver_rows, list(driver_rows[0].keys()) if driver_rows else [])
     write_csv(output_dir / "star_problem_stores.csv", star_rows, list(star_rows[0].keys()) if star_rows else [])
 
+    stall_attribution: dict[str, Any] = {"enabled": False}
+    stall_gap = "当前未提供自助菜品取数和菜品库基础信息，不能做档口穿透归因。"
+    if dish_inputs and catalog_path:
+        stall_attribution = profile_dish_inputs(dish_inputs, catalog_path, output_dir, target_windows)
+        period_coverage = stall_attribution.get("period_coverage", {})
+        missing_periods = [
+            period_coverage.get(key, {}).get("label", key)
+            for key in ["current", "previous", "yoy"]
+            if not period_coverage.get(key, {}).get("rows")
+        ]
+        missing_note = (
+            f"；菜品主题数据缺少{'、'.join(missing_periods)}，对应档口/菜品同比环比变化会显示为 N/A"
+            if missing_periods else ""
+        )
+        stall_gap = (
+            f"档口按菜品库「总部菜品.基础分类」归因；菜品库匹配率 {stall_attribution.get('match_rate', 0):.1%}，"
+            f"未匹配和重名菜品单独归类；总部套餐暂未拆解到套餐组成菜品{missing_note}。"
+        )
+    elif dish_inputs or catalog_path:
+        stall_gap = "档口穿透需要同时提供自助菜品取数和菜品库基础信息；当前只提供了一类输入，未启用档口归因。"
+
     summary = {
         "meta": {
             "inputs": [
@@ -752,8 +1244,10 @@ def profile(inputs: list[Path], output_dir: Path, target_windows: dict[str, tupl
                 "weekly_store_comparison.csv",
                 "store_driver_summary.csv",
                 "star_problem_stores.csv",
+                *stall_attribution.get("outputs", []),
                 "weekly_meeting_summary.json",
             ],
+            "stall_attribution": stall_attribution,
         },
         "comparison": comparison_rows,
         "drivers": driver_rows,
@@ -764,7 +1258,7 @@ def profile(inputs: list[Path], output_dir: Path, target_windows: dict[str, tupl
         "weekly_trend_comparison": trend_comparison_rows,
         "data_gaps": [
             "当前营业分组表没有网评分数、评论文本字段，不能做网评分数和词云分析。",
-            "当前营业分组表没有档口、菜品、品项字段，不能做档口穿透归因。",
+            stall_gap,
         ],
     }
     (output_dir / "weekly_meeting_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -774,6 +1268,8 @@ def profile(inputs: list[Path], output_dir: Path, target_windows: dict[str, tupl
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, nargs="+", type=Path)
+    parser.add_argument("--dish-input", nargs="+", type=Path)
+    parser.add_argument("--catalog", type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--current-start", type=parse_date, default=DEFAULT_TARGET_WINDOWS["current"][1])
     parser.add_argument("--current-end", type=parse_date, default=DEFAULT_TARGET_WINDOWS["current"][2])
@@ -787,7 +1283,7 @@ def main() -> None:
         "previous": ("环比周", args.previous_start, args.previous_end),
         "yoy": ("同比周", args.yoy_start, args.yoy_end),
     }
-    summary = profile(args.input, args.output_dir, target_windows)
+    summary = profile(args.input, args.output_dir, target_windows, args.dish_input, args.catalog)
     print(json.dumps({
         "coverage_start": summary["meta"]["coverage_start"],
         "coverage_end": summary["meta"]["coverage_end"],
