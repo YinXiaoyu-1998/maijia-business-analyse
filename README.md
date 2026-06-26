@@ -5,6 +5,8 @@ A reusable skill for Maijia Xiaoguan / Meituan POS business analysis. It helps a
 ## What It Does
 
 - Guides data export from Meituan 管家 `自助营业取数`.
+- Notes when to fetch `自助菜品取数` for dish-level penetration and attribution.
+- Documents how to export `菜品库` basic information and use `基础分类` as the stall/档口 dimension.
 - Processes large Excel exports without loading the whole workbook into memory.
 - Builds fact tables for stores, channels, dayparts, members, and monthly trends.
 - Generates a self-contained HTML report with KPI cards, bar charts, scatter plots, heatmaps, sortable tables, and an opportunity pool.
@@ -33,7 +35,7 @@ Use the skill at /path/to/maijia-business-analyse to analyze Meituan business da
 
 ## Usage
 
-### 1. Fetch Data
+### 1. Fetch Business Data
 
 Read `references/meituan_export_workflow.zh.md`. The core workflow is:
 
@@ -51,6 +53,10 @@ python3 scripts/download_meituan_signed_url.py \
   --url '<signed-s3plus-url>' \
   --output documents/maijia_business_analysis/raw_exports/maijia_business_data_YYYYMMDD_YYYYMMDD.xlsx
 ```
+
+When dish-level penetration, menu attribution, or "穿透到菜品" is required, use the same reference file and fetch `自助取数 -> 自助菜品取数`. Select all field groups and download the matching `菜品主题数据(日期【...】)` row from `下载清单记录`, then save it with a stable path such as `documents/maijia_dishes.xlsx`.
+
+When stall/档口 attribution is required, also export the dish catalog from `运营中心 -> 菜品管理 -> 菜品库 -> 菜品导出 -> 导出菜品基础信息`. Select the target brand, usually `麦家小馆`, choose all fields, and save it as a stable file such as `documents/maijia_dish_catalog.xlsx`. In this analysis workflow, `档口 = 基础分类`.
 
 ### 2. Run the Full Pipeline
 

@@ -5,6 +5,8 @@
 ## 可以做什么
 
 - 指导 agent 从美团管家导出 `营业分组表`。
+- 说明何时需要额外导出 `自助菜品取数`，用于菜品穿透和归因。
+- 说明如何导出 `菜品库` 基础信息，并把 `基础分类` 作为档口维度。
 - 处理很大的 `.xlsx` 文件，不需要一次性读完整工作簿。
 - 生成门店、渠道、餐段、会员、月度趋势等事实表。
 - 自动生成自包含 HTML 报告，包含 KPI、柱状图、散点图、热力图、排序表和机会池。
@@ -33,7 +35,7 @@ Use the skill at /path/to/maijia-business-analyse to analyze Meituan business da
 
 ## 使用方式
 
-### 1. 获取数据
+### 1. 获取营业数据
 
 阅读 `references/meituan_export_workflow.zh.md`。核心流程是：
 
@@ -51,6 +53,10 @@ python3 scripts/download_meituan_signed_url.py \
   --url '<signed-s3plus-url>' \
   --output documents/maijia_business_analysis/raw_exports/maijia_business_data_YYYYMMDD_YYYYMMDD.xlsx
 ```
+
+当需要菜品穿透、菜单归因或“穿透到菜品”时，使用同一参考文件里的 `自助取数 -> 自助菜品取数` 流程。展开筛选并全选字段组，导出后在 `下载清单记录` 中下载匹配的 `菜品主题数据(日期【...】)` 行，并保存为稳定路径，例如 `documents/maijia_dishes.xlsx`。
+
+当需要档口归因时，还需要从 `运营中心 -> 菜品管理 -> 菜品库 -> 菜品导出 -> 导出菜品基础信息` 导出菜品库。选择目标品牌，通常是 `麦家小馆`，选择全部字段，保存为稳定路径，例如 `documents/maijia_dish_catalog.xlsx`。在本分析口径里，`档口 = 基础分类`。
 
 ### 2. 一键生成事实表和 HTML 报告
 
