@@ -25,6 +25,9 @@ Use this skill to run the Maijia Xiaoguan operating-data workflow end to end:
 - `scripts/profile_business_data.py`: stream-read a Meituan `.xlsx` and create fact tables plus `analysis_summary.json`.
 - `scripts/generate_business_report_html.py`: render a self-contained HTML diagnosis report from the fact tables.
 - `scripts/run_pipeline.py`: execute profiling and HTML generation in one command.
+- `scripts/profile_weekly_meeting_data.py`: stream-read weekly meeting business/dish/catalog inputs into comparison and attribution fact tables.
+- `scripts/generate_weekly_meeting_report_html.py`: render the full weekly meeting HTML with trend, quadrant, channel, driver, daypart, and optional stall attribution sections.
+- `scripts/run_weekly_meeting_report.py`: execute the weekly meeting profiling and full HTML generation in one command.
 - `scripts/download_meituan_signed_url.py`: download an export from an already-authorized signed Meituan/Sankuai URL.
 - `references/meituan_export_workflow.zh.md`: read when the user asks to fetch or re-fetch data from Meituan 管家.
 - `references/report_style.zh.md`: read before drafting narrative conclusions or changing report structure.
@@ -75,6 +78,14 @@ Preferred joins:
 With these sources, a weekly meeting report can drill from `门店 -> 周 -> 渠道/餐段 -> 档口(基础分类) -> 菜品/规格`, and can attribute store revenue changes to specific stall categories before drilling into individual dishes.
 
 For full weekly meeting attribution, the `自助菜品取数` export must cover all comparison windows used by the report: current week, previous week, and year-over-year week. If it only covers the current week, the report may show current stall structure but cannot claim stall-level WoW/YoY drivers.
+
+## Weekly Meeting Report Guardrail
+
+When the user asks for a weekly report, weekly meeting report, 周报, 周会 HTML, or a report for a specific current/previous/YoY comparison window, always use `scripts/run_weekly_meeting_report.py` or its two underlying scripts. This is the full weekly HTML pipeline.
+
+Do not create a one-off baseline/ad hoc report for these requests. Do not use or imitate historical outputs under `documents/maijia_weekly_baseline_analysis/`, filenames like `maijia_weekly_baseline_report_*.html`, or screenshots named `maijia_weekly_baseline_report_*.png`. Those are historical temporary artifacts, not the current reporting standard.
+
+If dish and catalog files are available, pass `--dish-input` and `--catalog` so stall attribution is added to the existing full weekly HTML. If they are not available, still run the full weekly pipeline without those flags and state that stall attribution is omitted due to missing inputs.
 
 ## Analysis Pipeline
 
