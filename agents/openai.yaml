@@ -1,6 +1,6 @@
 interface:
   display_name: "Maijia Business Analyse"
-  short_description: "美团营业数据取数、分析与经营诊断报告"
-  default_prompt: "Use $maijia-business-analyse to fetch Meituan POS business data, profile it into fact tables, and generate a visual operating diagnosis report."
+  short_description: "美团营业/菜品自助取数、分析与经营诊断报告"
+  default_prompt: "Use $maijia-business-analyse to fetch Meituan POS business data, add dish data when attribution requires it, profile fact tables, and generate a visual operating diagnosis report."
 policy:
   allow_implicit_invocation: true
