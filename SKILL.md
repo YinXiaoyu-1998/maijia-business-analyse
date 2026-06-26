@@ -37,6 +37,10 @@ Use this skill to run the Maijia Xiaoguan operating-data workflow end to end:
 
 When the user asks to fetch new data from Meituan, read `references/meituan_export_workflow.zh.md`.
 
+Before opening Meituan, first check whether the correctly named local raw export already exists under `documents/raw_exports/` and validate it with `file` / `unzip -t` when practical. If the local file is missing, outdated, has the wrong date range, or may lack required fields, create a fresh export from the relevant Meituan report page by following the workflow below.
+
+Do not begin by browsing Meituan `下载清单` for old download records. Historical download-list rows may have the wrong date range, stale data, or missing fields. Use `下载清单` only after you have just configured the report, selected the required fields, clicked `查询`, and created a new export task; then download the row whose report name, date range, and creation/update time match that fresh task.
+
 For business operating facts, use `自助营业取数`:
 
 1. Use the user's logged-in browser session.
