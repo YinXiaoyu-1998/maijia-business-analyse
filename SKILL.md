@@ -70,6 +70,8 @@ Save all raw downloaded files under `documents/raw_exports/` with these names:
 - Dish catalog export: `maijia_dish_catalog_YYYYMMDD.xlsx`
 - If a date range is split across multiple exports, append `_part01`, `_part02`, etc. before `.xlsx`.
 
+Keep the date range in dish export filenames accurate. The weekly profiling script can use the `maijia_dishes_YYYYMMDD_YYYYMMDD.xlsx` / `_partNN` filename range as the inspection date coverage and skip an otherwise expensive first full-workbook scan before the actual attribution pass. If a dish file is not named with this pattern, the script falls back to scanning the workbook rows to infer dates.
+
 When the analysis needs dish-level detail, menu penetration, or attribution that cannot be answered by `营业分组表`, fetch a second export with `自助取数 -> 自助菜品取数`. Select all field groups, query, export, and download the matching `菜品主题数据(日期【...】)` row from `下载清单`. Save it as `documents/raw_exports/maijia_dishes_YYYYMMDD_YYYYMMDD.xlsx`. Use the `maijia-menu-analyse` skill for detailed dish-data handling.
 
 When the analysis needs stall/档口 attribution, fetch the dish catalog dimension from `运营中心 -> 菜品管理 -> 菜品库`. Select the target brand, usually `麦家小馆`, click `菜品导出`, choose `导出菜品基础信息`, select all fields, confirm, and save the result as `documents/raw_exports/maijia_dish_catalog_YYYYMMDD.xlsx`.

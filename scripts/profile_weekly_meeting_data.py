@@ -18,6 +18,7 @@ from zipfile import ZipFile
 
 CELL_RE = re.compile(r"([A-Z]+)(\d+)")
 DATE_RE = re.compile(r"^(\d{4}[/\-]\d{1,2}[/\-]\d{1,2}|\d{8})$")
+EXPORT_RANGE_RE = re.compile(r"_(\d{8})_(\d{8})(?:_part\d+)?\.xlsx$")
 
 DEFAULT_TARGET_WINDOWS = {
     "current": ("本周", date(2026, 6, 14), date(2026, 6, 20)),
@@ -468,11 +469,23 @@ def inspect_workbook(path: Path) -> dict[str, Any]:
     }
 
 
+def date_range_from_export_name(path: Path) -> set[date] | None:
+    match = EXPORT_RANGE_RE.search(path.name)
+    if not match:
+        return None
+    start = parse_date(match.group(1))
+    end = parse_date(match.group(2))
+    if not start or not end or end < start:
+        return None
+    days = (end - start).days
+    return {start + timedelta(days=offset) for offset in range(days + 1)}
+
+
 def inspect_dish_workbook(path: Path) -> dict[str, Any]:
     title = ""
     filters = ""
     headers: list[str] = []
-    dates: set[date] = set()
+    dates: set[date] = date_range_from_export_name(path) or set()
     for row_number, values in read_workbook_rows(path):
         if row_number == 1:
             title = values.get(1, "")
@@ -485,6 +498,8 @@ def inspect_dish_workbook(path: Path) -> dict[str, Any]:
                 raise ValueError(f"{path} is not 菜品主题数据: {title}")
             if missing:
                 raise ValueError(f"{path} missing required dish columns: {missing}")
+            if dates:
+                break
         elif row_number >= 4 and headers:
             row = row_dict(headers, values)
             parsed = parse_date(row.get("营业日", ""))
