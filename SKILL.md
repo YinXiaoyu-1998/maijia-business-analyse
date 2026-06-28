@@ -72,6 +72,8 @@ Save all raw downloaded files under `documents/raw_exports/` with these names:
 
 Keep the date range in dish export filenames accurate. The weekly profiling script can use the `maijia_dishes_YYYYMMDD_YYYYMMDD.xlsx` / `_partNN` filename range as the inspection date coverage and skip an otherwise expensive first full-workbook scan before the actual attribution pass. If a dish file is not named with this pattern, the script falls back to scanning the workbook rows to infer dates.
 
+Some large Meituan/WPS exports may paginate a single `.xlsx` across multiple worksheets, such as `菜品主题数据` and `菜品主题数据-2`, while keeping the same title/filter/header rows on each sheet. Treat these worksheets as one logical export. The weekly profiling script is expected to stream every matching worksheet in the workbook; do not assume `sheet1.xml` alone is complete. When filename date ranges prove that a dish export is fully outside the current, previous, and YoY attribution windows, the weekly profiler can skip that entire file instead of scanning every row.
+
 When the analysis needs dish-level detail, menu penetration, or attribution that cannot be answered by `营业分组表`, fetch a second export with `自助取数 -> 自助菜品取数`. Select all field groups, query, export, and download the matching `菜品主题数据(日期【...】)` row from `下载清单`. Save it as `documents/raw_exports/maijia_dishes_YYYYMMDD_YYYYMMDD.xlsx`. Use the `maijia-menu-analyse` skill for detailed dish-data handling.
 
 When the analysis needs stall/档口 attribution, fetch the dish catalog dimension from `运营中心 -> 菜品管理 -> 菜品库`. Select the target brand, usually `麦家小馆`, click `菜品导出`, choose `导出菜品基础信息`, select all fields, confirm, and save the result as `documents/raw_exports/maijia_dish_catalog_YYYYMMDD.xlsx`.
@@ -105,6 +107,8 @@ Do not create a one-off baseline/ad hoc report for these requests. Do not use or
 For weekly reports, require long-period business inputs. The `--input` files must include `营业分组表` coverage for the report's complete 16-week current-year trend window and aligned prior-year trend window, plus the requested current/previous/YoY comparison windows. The current week should be derived from the long-period business input whenever possible. Do not use only three short exports for current week, previous week, and YoY week as the business input set; that may make comparison tables look complete while leaving the "最近 16 周收入趋势" chart mostly empty.
 
 If overlapping business exports must be combined, remove or exclude only the duplicated date range before profiling. Do not cut away unrelated dates that are needed for trend charts. Prefer complete long-period coverage over short-window convenience, even when the long file is large; the profiling scripts are designed to stream large workbooks.
+
+If a raw `.xlsx` contains multiple worksheets with the same report title, such as `营业分组表-2` or `菜品主题数据-2`, keep the workbook intact and pass the file once. The weekly profiler should combine all matching worksheets in that file and still use filename/date overlap rules only between separate input files.
 
 If dish and catalog files are available, pass `--dish-input` and `--catalog` so stall attribution is added to the existing full weekly HTML. If they are not available, still run the full weekly pipeline without those flags and state that stall attribution is omitted due to missing inputs.
 

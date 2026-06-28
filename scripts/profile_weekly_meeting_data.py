@@ -12,13 +12,16 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterable
-from xml.etree.ElementTree import iterparse
+from xml.etree.ElementTree import fromstring, iterparse
 from zipfile import ZipFile
 
 
 CELL_RE = re.compile(r"([A-Z]+)(\d+)")
 DATE_RE = re.compile(r"^(\d{4}[/\-]\d{1,2}[/\-]\d{1,2}|\d{8})$")
 EXPORT_RANGE_RE = re.compile(r"_(\d{8})_(\d{8})(?:_part\d+)?\.xlsx$")
+WORKBOOK_NS = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+REL_NS = {"rel": "http://schemas.openxmlformats.org/package/2006/relationships"}
+OFFICE_REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 
 DEFAULT_TARGET_WINDOWS = {
     "current": ("本周", date(2026, 6, 14), date(2026, 6, 20)),
@@ -302,6 +305,16 @@ def target_period_for(value: date, target_windows: dict[str, tuple[str, date, da
     return None
 
 
+def dates_for_target_windows(target_windows: dict[str, tuple[str, date, date]]) -> set[date]:
+    dates: set[date] = set()
+    for _, start, end in target_windows.values():
+        current = start
+        while current <= end:
+            dates.add(current)
+            current += timedelta(days=1)
+    return dates
+
+
 def trend_comparison_window_for(value: date, trend_windows: list[tuple[str, str, int, date, date]]) -> tuple[str, str, int, date, date] | None:
     for series_key, series_label, window_index, start, end in trend_windows:
         if start <= value <= end:
@@ -424,17 +437,66 @@ def derive(agg: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def workbook_worksheets(zf: ZipFile) -> list[dict[str, str]]:
+    if "xl/workbook.xml" not in zf.namelist():
+        return [
+            {"name": path.rsplit("/", 1)[-1].replace(".xml", ""), "path": path}
+            for path in sorted(zf.namelist())
+            if path.startswith("xl/worksheets/sheet") and path.endswith(".xml")
+        ]
+
+    rels: dict[str, str] = {}
+    if "xl/_rels/workbook.xml.rels" in zf.namelist():
+        rel_root = fromstring(zf.read("xl/_rels/workbook.xml.rels"))
+        for rel in rel_root.findall("rel:Relationship", REL_NS):
+            rel_type = rel.attrib.get("Type", "")
+            if not rel_type.endswith("/worksheet"):
+                continue
+            target = rel.attrib.get("Target", "")
+            if target.startswith("/"):
+                path = target.lstrip("/")
+            else:
+                path = f"xl/{target}"
+            rels[rel.attrib.get("Id", "")] = path
+
+    workbook_root = fromstring(zf.read("xl/workbook.xml"))
+    sheets = []
+    for sheet in workbook_root.findall("main:sheets/main:sheet", WORKBOOK_NS):
+        rel_id = sheet.attrib.get(f"{{{OFFICE_REL_NS}}}id", "")
+        path = rels.get(rel_id)
+        if path and path in zf.namelist():
+            sheets.append({"name": sheet.attrib.get("name", path), "path": path})
+    return sheets
+
+
+def worksheet_rows(zf: ZipFile, shared_strings: list[str], sheet_path: str) -> Iterable[tuple[int, dict[int, str]]]:
+    with zf.open(sheet_path) as handle:
+        for _, elem in iterparse(handle, events=("end",)):
+            if not is_tag(elem, "row"):
+                continue
+            row_number = int(elem.attrib.get("r", "0") or 0)
+            values = row_values(elem, shared_strings)
+            elem.clear()
+            yield row_number, values
+
+
 def read_workbook_rows(path: Path, sheet_index: int = 1) -> Iterable[tuple[int, dict[int, str]]]:
     with ZipFile(path) as zf:
         shared_strings = load_shared_strings(zf)
-        with zf.open(f"xl/worksheets/sheet{sheet_index}.xml") as handle:
-            for _, elem in iterparse(handle, events=("end",)):
-                if not is_tag(elem, "row"):
-                    continue
-                row_number = int(elem.attrib.get("r", "0") or 0)
-                values = row_values(elem, shared_strings)
-                elem.clear()
-                yield row_number, values
+        yield from worksheet_rows(zf, shared_strings, f"xl/worksheets/sheet{sheet_index}.xml")
+
+
+def read_workbook_sheets(path: Path) -> Iterable[tuple[dict[str, str], Iterable[tuple[int, dict[int, str]]]]]:
+    with ZipFile(path) as zf:
+        shared_strings = load_shared_strings(zf)
+        for sheet in workbook_worksheets(zf):
+            yield sheet, worksheet_rows(zf, shared_strings, sheet["path"])
+
+
+def read_workbook_sheet_rows(path: Path) -> Iterable[tuple[dict[str, str], int, dict[int, str]]]:
+    for sheet, rows in read_workbook_sheets(path):
+        for row_number, values in rows:
+            yield sheet, row_number, values
 
 
 def inspect_workbook(path: Path) -> dict[str, Any]:
@@ -442,26 +504,44 @@ def inspect_workbook(path: Path) -> dict[str, Any]:
     filters = ""
     headers: list[str] = []
     dates: set[date] = set()
-    for row_number, values in read_workbook_rows(path):
+    sheet_count = 0
+    current_sheet = ""
+    current_title = ""
+    current_headers: list[str] = []
+    for sheet, row_number, values in read_workbook_sheet_rows(path):
+        if sheet["path"] != current_sheet:
+            current_sheet = sheet["path"]
+            current_title = ""
+            current_headers = []
         if row_number == 1:
-            title = values.get(1, "")
+            current_title = values.get(1, "")
+            if current_title == "营业分组表":
+                sheet_count += 1
+                title = current_title
         elif row_number == 2:
-            filters = values.get(1, "")
+            if current_title == "营业分组表" and not filters:
+                filters = values.get(1, "")
         elif row_number == 3:
-            headers = [values.get(index, "") for index in range(1, max(values) + 1)]
-            missing = [field for field in REQUIRED_COLUMNS if field not in headers]
-            if title != "营业分组表":
-                raise ValueError(f"{path} is not 营业分组表: {title}")
+            if current_title != "营业分组表":
+                continue
+            current_headers = [values.get(index, "") for index in range(1, max(values) + 1)]
+            missing = [field for field in REQUIRED_COLUMNS if field not in current_headers]
             if missing:
-                raise ValueError(f"{path} missing required columns: {missing}")
-        elif row_number >= 4:
-            parsed = parse_date(values.get(1, ""))
+                raise ValueError(f"{path} sheet {sheet['name']} missing required columns: {missing}")
+            if len(current_headers) > len(headers):
+                headers = current_headers
+        elif row_number >= 4 and current_headers:
+            row = row_dict(current_headers, values)
+            parsed = parse_date(row.get("营业日期", ""))
             if parsed:
                 dates.add(parsed)
+    if sheet_count == 0:
+        raise ValueError(f"{path} does not contain 营业分组表 sheets")
     return {
         "path": str(path),
         "title": title,
         "filters": filters,
+        "sheet_count": sheet_count,
         "header_count": len(headers),
         "dates": sorted(dates),
         "min_date": min(dates) if dates else None,
@@ -485,30 +565,45 @@ def inspect_dish_workbook(path: Path) -> dict[str, Any]:
     title = ""
     filters = ""
     headers: list[str] = []
-    dates: set[date] = date_range_from_export_name(path) or set()
-    for row_number, values in read_workbook_rows(path):
-        if row_number == 1:
-            title = values.get(1, "")
-        elif row_number == 2:
-            filters = values.get(1, "")
-        elif row_number == 3:
-            headers = [values.get(index, "") for index in range(1, max(values) + 1)]
-            missing = [field for field in DISH_REQUIRED_COLUMNS if field not in headers]
-            if title != "菜品主题数据":
-                raise ValueError(f"{path} is not 菜品主题数据: {title}")
-            if missing:
-                raise ValueError(f"{path} missing required dish columns: {missing}")
-            if dates:
-                break
-        elif row_number >= 4 and headers:
-            row = row_dict(headers, values)
-            parsed = parse_date(row.get("营业日", ""))
-            if parsed:
-                dates.add(parsed)
+    filename_dates = date_range_from_export_name(path)
+    dates: set[date] = filename_dates or set()
+    sheet_count = 0
+    for sheet, rows in read_workbook_sheets(path):
+        current_title = ""
+        current_headers: list[str] = []
+        for row_number, values in rows:
+            if row_number == 1:
+                current_title = values.get(1, "")
+                if current_title == "菜品主题数据":
+                    sheet_count += 1
+                    title = current_title
+                continue
+            if current_title != "菜品主题数据":
+                continue
+            if row_number == 2:
+                if not filters:
+                    filters = values.get(1, "")
+            elif row_number == 3:
+                current_headers = [values.get(index, "") for index in range(1, max(values) + 1)]
+                missing = [field for field in DISH_REQUIRED_COLUMNS if field not in current_headers]
+                if missing:
+                    raise ValueError(f"{path} sheet {sheet['name']} missing required dish columns: {missing}")
+                if len(current_headers) > len(headers):
+                    headers = current_headers
+                if filename_dates:
+                    break
+            elif row_number >= 4 and current_headers:
+                row = row_dict(current_headers, values)
+                parsed = parse_date(row.get("营业日", ""))
+                if parsed:
+                    dates.add(parsed)
+    if sheet_count == 0:
+        raise ValueError(f"{path} does not contain 菜品主题数据 sheets")
     return {
         "path": str(path),
         "title": title,
         "filters": filters,
+        "sheet_count": sheet_count,
         "header_count": len(headers),
         "dates": sorted(dates),
         "min_date": min(dates) if dates else None,
@@ -919,11 +1014,27 @@ def profile_dish_inputs(
     processed_rows = 0
     skipped_duplicate_rows = 0
     skipped_out_of_scope_rows = 0
+    skipped_out_of_scope_files: list[str] = []
+    target_dates = dates_for_target_windows(target_windows)
 
     for index, path in enumerate(dish_inputs):
+        if inspections[index]["dates"] and set(inspections[index]["dates"]).isdisjoint(target_dates):
+            skipped_out_of_scope_files.append(str(path))
+            continue
         excluded_dates = later_dates[index]
         headers: list[str] = []
-        for row_number, values in read_workbook_rows(path):
+        current_sheet = ""
+        sheet_title = ""
+        for sheet, row_number, values in read_workbook_sheet_rows(path):
+            if sheet["path"] != current_sheet:
+                current_sheet = sheet["path"]
+                sheet_title = ""
+                headers = []
+            if row_number == 1:
+                sheet_title = values.get(1, "")
+                continue
+            if sheet_title != "菜品主题数据":
+                continue
             if row_number == 3:
                 headers = [values.get(col, "") for col in range(1, max(values) + 1)]
                 continue
@@ -984,6 +1095,7 @@ def profile_dish_inputs(
         {"metric": "catalog_stall_count", "value": catalog["stall_count"]},
         {"metric": "skipped_duplicate_rows", "value": skipped_duplicate_rows},
         {"metric": "skipped_out_of_scope_rows", "value": skipped_out_of_scope_rows},
+        {"metric": "skipped_out_of_scope_files", "value": len(skipped_out_of_scope_files)},
     ]
     write_csv(output_dir / "dish_catalog_match_summary.csv", match_rows, ["metric", "value"])
 
@@ -993,6 +1105,7 @@ def profile_dish_inputs(
             {
                 "path": info["path"],
                 "title": info["title"],
+                "sheet_count": info["sheet_count"],
                 "header_count": info["header_count"],
                 "min_date": date_text(info["min_date"]) if info["min_date"] else None,
                 "max_date": date_text(info["max_date"]) if info["max_date"] else None,
@@ -1009,6 +1122,7 @@ def profile_dish_inputs(
         "processed_rows": processed_rows,
         "processed_date_start": date_text(min(processed_dates)) if processed_dates else None,
         "processed_date_end": date_text(max(processed_dates)) if processed_dates else None,
+        "skipped_out_of_scope_files": skipped_out_of_scope_files,
         "period_coverage": {
             key: {
                 "label": label,
@@ -1059,7 +1173,18 @@ def profile(
     for index, path in enumerate(inputs):
         excluded_dates = later_dates[index]
         headers: list[str] = []
-        for row_number, values in read_workbook_rows(path):
+        current_sheet = ""
+        sheet_title = ""
+        for sheet, row_number, values in read_workbook_sheet_rows(path):
+            if sheet["path"] != current_sheet:
+                current_sheet = sheet["path"]
+                sheet_title = ""
+                headers = []
+            if row_number == 1:
+                sheet_title = values.get(1, "")
+                continue
+            if sheet_title != "营业分组表":
+                continue
             if row_number == 3:
                 headers = [values.get(col, "") for col in range(1, max(values) + 1)]
                 continue
@@ -1235,6 +1360,7 @@ def profile(
                 {
                     "path": info["path"],
                     "title": info["title"],
+                    "sheet_count": info["sheet_count"],
                     "header_count": info["header_count"],
                     "min_date": date_text(info["min_date"]) if info["min_date"] else None,
                     "max_date": date_text(info["max_date"]) if info["max_date"] else None,
