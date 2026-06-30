@@ -995,6 +995,7 @@ def profile_dish_inputs(
     catalog_path: Path,
     output_dir: Path,
     target_windows: dict[str, tuple[str, date, date]],
+    output_prefix: str = "weekly",
 ) -> dict[str, Any]:
     catalog = load_catalog(catalog_path)
     inspections = [inspect_dish_workbook(path) for path in dish_inputs]
@@ -1075,16 +1076,21 @@ def profile_dish_inputs(
     matched = match_counts.get("matched", 0)
     match_rate = safe_div(matched, total_matches) or 0
 
-    write_csv(output_dir / "weekly_store_stall_metrics.csv", target_rows, ["period_key", "period_label", "门店名称", "档口"] + DISH_METRIC_FIELDS)
+    stall_metrics_name = f"{output_prefix}_store_stall_metrics.csv"
+    stall_comparison_name = f"{output_prefix}_store_stall_comparison.csv"
+    stall_driver_name = f"{output_prefix}_store_stall_driver_summary.csv"
+    stall_dish_driver_name = f"{output_prefix}_store_stall_dish_drivers.csv"
+
+    write_csv(output_dir / stall_metrics_name, target_rows, ["period_key", "period_label", "门店名称", "档口"] + DISH_METRIC_FIELDS)
     comparison_fields = ["门店名称", "档口"]
     for prefix in ["current", "previous", "yoy"]:
         comparison_fields.extend([f"{prefix}_{field}" for field in DISH_METRIC_FIELDS])
     for prefix in ["wow", "yoy"]:
         for field in ["income", "quantity", "positive_orders", "discount", "refund_amount"]:
             comparison_fields.extend([f"{prefix}_{field}_delta", f"{prefix}_{field}_pct"])
-    write_csv(output_dir / "weekly_store_stall_comparison.csv", comparison_rows, comparison_fields)
-    write_csv(output_dir / "weekly_store_stall_driver_summary.csv", driver_rows, DISH_DRIVER_SUMMARY_FIELDS)
-    write_csv(output_dir / "weekly_store_stall_dish_drivers.csv", dish_drivers, DISH_DRIVER_DETAIL_FIELDS)
+    write_csv(output_dir / stall_comparison_name, comparison_rows, comparison_fields)
+    write_csv(output_dir / stall_driver_name, driver_rows, DISH_DRIVER_SUMMARY_FIELDS)
+    write_csv(output_dir / stall_dish_driver_name, dish_drivers, DISH_DRIVER_DETAIL_FIELDS)
     match_rows = [
         {"metric": "processed_rows", "value": processed_rows},
         {"metric": "matched_rows", "value": matched},
@@ -1135,10 +1141,10 @@ def profile_dish_inputs(
         "match_counts": dict(match_counts),
         "match_rate": fmt(match_rate, 4),
         "outputs": [
-            "weekly_store_stall_metrics.csv",
-            "weekly_store_stall_comparison.csv",
-            "weekly_store_stall_driver_summary.csv",
-            "weekly_store_stall_dish_drivers.csv",
+            stall_metrics_name,
+            stall_comparison_name,
+            stall_driver_name,
+            stall_dish_driver_name,
             "dish_catalog_match_summary.csv",
         ],
     }
