@@ -28,6 +28,9 @@ Use this skill to run the Maijia Xiaoguan operating-data workflow end to end:
 - `scripts/profile_weekly_meeting_data.py`: stream-read weekly meeting business/dish/catalog inputs into comparison and attribution fact tables.
 - `scripts/generate_weekly_meeting_report_html.py`: render the full weekly meeting HTML with trend, quadrant, channel, driver, daypart, and optional stall attribution sections.
 - `scripts/run_weekly_meeting_report.py`: execute the weekly meeting profiling and full HTML generation in one command.
+- `scripts/profile_monthly_meeting_data.py`: stream-read monthly meeting business/dish/catalog inputs into month-level comparison, 6-month trend, and attribution fact tables.
+- `scripts/generate_monthly_meeting_report_html.py`: render the full monthly meeting HTML with month-level trend, quadrant, channel, driver, daypart, and optional stall attribution sections.
+- `scripts/run_monthly_meeting_report.py`: execute the monthly meeting profiling and full HTML generation in one command.
 - `scripts/download_meituan_signed_url.py`: download an export from an already-authorized signed Meituan/Sankuai URL.
 - `references/meituan_export_workflow.zh.md`: read when the user asks to fetch or re-fetch data from Meituan 管家.
 - `references/report_style.zh.md`: read before drafting narrative conclusions or changing report structure.
@@ -72,6 +75,8 @@ Save all raw downloaded files under `documents/raw_exports/` with these names:
 
 Keep the date range in dish export filenames accurate. The weekly profiling script can use the `maijia_dishes_YYYYMMDD_YYYYMMDD.xlsx` / `_partNN` filename range as the inspection date coverage and skip an otherwise expensive first full-workbook scan before the actual attribution pass. If a dish file is not named with this pattern, the script falls back to scanning the workbook rows to infer dates.
 
+Some large Meituan/WPS exports may paginate a single `.xlsx` across multiple worksheets, such as `菜品主题数据` and `菜品主题数据-2`, while keeping the same title/filter/header rows on each sheet. Treat these worksheets as one logical export. The weekly profiling script is expected to stream every matching worksheet in the workbook; do not assume `sheet1.xml` alone is complete. When filename date ranges prove that a dish export is fully outside the current, previous, and YoY attribution windows, the weekly profiler can skip that entire file instead of scanning every row.
+
 When the analysis needs dish-level detail, menu penetration, or attribution that cannot be answered by `营业分组表`, fetch a second export with `自助取数 -> 自助菜品取数`. Select all field groups, query, export, and download the matching `菜品主题数据(日期【...】)` row from `下载清单`. Save it as `documents/raw_exports/maijia_dishes_YYYYMMDD_YYYYMMDD.xlsx`. Use the `maijia-menu-analyse` skill for detailed dish-data handling.
 
 When the analysis needs stall/档口 attribution, fetch the dish catalog dimension from `运营中心 -> 菜品管理 -> 菜品库`. Select the target brand, usually `麦家小馆`, click `菜品导出`, choose `导出菜品基础信息`, select all fields, confirm, and save the result as `documents/raw_exports/maijia_dish_catalog_YYYYMMDD.xlsx`.
@@ -106,7 +111,22 @@ For weekly reports, require long-period business inputs. The `--input` files mus
 
 If overlapping business exports must be combined, remove or exclude only the duplicated date range before profiling. Do not cut away unrelated dates that are needed for trend charts. Prefer complete long-period coverage over short-window convenience, even when the long file is large; the profiling scripts are designed to stream large workbooks.
 
+If a raw `.xlsx` contains multiple worksheets with the same report title, such as `营业分组表-2` or `菜品主题数据-2`, keep the workbook intact and pass the file once. The weekly profiler should combine all matching worksheets in that file and still use filename/date overlap rules only between separate input files.
+
 If dish and catalog files are available, pass `--dish-input` and `--catalog` so stall attribution is added to the existing full weekly HTML. If they are not available, still run the full weekly pipeline without those flags and state that stall attribution is omitted due to missing inputs.
+
+## Monthly Meeting Report Guardrail
+
+When the user asks for a monthly report, 月报, 月会 HTML, or a month-level current/previous/YoY comparison, use `scripts/run_monthly_meeting_report.py` or its two underlying scripts. Do not repurpose the weekly meeting pipeline and merely pass month date ranges, because the weekly pipeline's trend buckets, filenames, and report language are week-specific.
+
+Monthly reports use these comparison windows:
+
+- current month requested by the user, normally a complete natural month;
+- previous month for MoM comparison;
+- the same calendar month in the previous year for YoY comparison;
+- a 6-month trend window ending at the current month, plus aligned prior-year months when covered by the business inputs.
+
+For monthly reports, pass long-period `营业分组表` inputs covering the current month, previous month, YoY month, and the 6-month current-year/prior-year trend windows. The monthly profiler writes month-level fact tables and uses natural-month buckets. If dish and catalog files are available, pass `--dish-input` and `--catalog`; the monthly profiler will use the same stall definition (`基础分类`) and compare 本月 / 上月 / 去年同月 at stall and dish level. If dish exports are split across multiple workbook worksheets such as `菜品主题数据-2`, keep the workbook intact and pass it once.
 
 ## Analysis Pipeline
 
@@ -155,6 +175,28 @@ python3 maijia-business-analyse/scripts/run_weekly_meeting_report.py \
 
 When `--dish-input` and `--catalog` are omitted, the weekly report remains backward-compatible and omits stall attribution.
 
+For the monthly meeting report with optional stall and dish attribution, run:
+
+```bash
+python3 maijia-business-analyse/scripts/run_monthly_meeting_report.py \
+  --input documents/raw_exports/maijia_business_CURRENT_TREND_START_CURRENT_END.xlsx \
+          documents/raw_exports/maijia_business_YOY_TREND_START_YOY_END.xlsx \
+  --dish-input documents/raw_exports/maijia_dishes_YYYYMMDD_YYYYMMDD.xlsx \
+  --catalog documents/raw_exports/maijia_dish_catalog_YYYYMMDD.xlsx \
+  --output-dir documents/maijia_monthly_meeting_analysis \
+  --report documents/maijia_monthly_meeting_analysis/maijia_monthly_meeting_report.html \
+  --company 麦家小馆 \
+  --current-start YYYY/MM/01 \
+  --current-end YYYY/MM/DD \
+  --previous-start YYYY/MM/01 \
+  --previous-end YYYY/MM/DD \
+  --yoy-start YYYY/MM/01 \
+  --yoy-end YYYY/MM/DD \
+  --trend-months 6
+```
+
+When `--dish-input` and `--catalog` are omitted, the monthly report remains backward-compatible and omits stall attribution.
+
 Expected fact tables:
 
 - `analysis_summary.json`
@@ -178,6 +220,22 @@ Weekly meeting fact tables:
 - `weekly_store_stall_comparison.csv` when dish and catalog inputs are available
 - `weekly_store_stall_driver_summary.csv` when dish and catalog inputs are available
 - `weekly_store_stall_dish_drivers.csv` when dish and catalog inputs are available
+- `dish_catalog_match_summary.csv` when dish and catalog inputs are available
+
+Monthly meeting fact tables:
+
+- `monthly_meeting_summary.json`
+- `monthly_store_metrics.csv`
+- `monthly_store_channel_metrics.csv`
+- `monthly_store_daypart_metrics.csv`
+- `monthly_trend_comparison_metrics.csv`
+- `monthly_store_comparison.csv`
+- `store_driver_summary.csv`
+- `star_problem_stores.csv`
+- `monthly_store_stall_metrics.csv` when dish and catalog inputs are available
+- `monthly_store_stall_comparison.csv` when dish and catalog inputs are available
+- `monthly_store_stall_driver_summary.csv` when dish and catalog inputs are available
+- `monthly_store_stall_dish_drivers.csv` when dish and catalog inputs are available
 - `dish_catalog_match_summary.csv` when dish and catalog inputs are available
 
 ## Report Drafting
