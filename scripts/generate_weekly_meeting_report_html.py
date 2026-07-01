@@ -218,7 +218,11 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
     previous_revenue = safe_sum(comparison, "previous_net_revenue")
     yoy_revenue = safe_sum(comparison, "yoy_net_revenue")
     current_customers = safe_sum(comparison, "current_customer_count")
+    previous_customers = safe_sum(comparison, "previous_customer_count")
+    yoy_customers = safe_sum(comparison, "yoy_customer_count")
     current_tables = safe_sum(comparison, "current_consumed_tables")
+    previous_tables = safe_sum(comparison, "previous_consumed_tables")
+    yoy_tables = safe_sum(comparison, "yoy_consumed_tables")
     current_aov = current_revenue / safe_sum(comparison, "current_positive_orders") if safe_sum(comparison, "current_positive_orders") else 0
     star_count = sum(1 for row in comparison if row.get("segment") == "明星门店")
     problem_count = sum(1 for row in comparison if row.get("segment") == "问题门店")
@@ -256,7 +260,11 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
             "wow_pct": pct_change(current_revenue, previous_revenue),
             "yoy_pct": pct_change(current_revenue, yoy_revenue),
             "current_customers": current_customers,
+            "wow_customer_pct": pct_change(current_customers, previous_customers),
+            "yoy_customer_pct": pct_change(current_customers, yoy_customers),
             "current_tables": current_tables,
+            "wow_table_pct": pct_change(current_tables, previous_tables),
+            "yoy_table_pct": pct_change(current_tables, yoy_tables),
             "current_aov": round(current_aov, 2),
             "star_count": star_count,
             "problem_count": problem_count,
@@ -689,8 +697,8 @@ HTML_TEMPLATE = r'''<!doctype html>
       setText('heroYoy', fmtPct(k.yoy_pct));
       const cards = [
         ['业务收入', fmtWan(k.current_revenue), `环比 ${fmtPct(k.wow_pct)} / 同比 ${fmtPct(k.yoy_pct)}`],
-        ['客流量', fmtNum(k.current_customers), '口径：用餐人数'],
-        ['开台数', fmtNum(k.current_tables), '口径：消费桌数'],
+        ['客流量', fmtNum(k.current_customers), `环比 ${fmtPct(k.wow_customer_pct)} / 同比 ${fmtPct(k.yoy_customer_pct)}`],
+        ['开台数', fmtNum(k.current_tables), `环比 ${fmtPct(k.wow_table_pct)} / 同比 ${fmtPct(k.yoy_table_pct)}`],
         ['门店分型', `${k.star_count} 明星 / ${k.problem_count} 问题`, '按收入中位数与环比 0% 划分象限']
       ];
       document.getElementById('kpiCards').innerHTML = cards.map(c => `<div class="card"><div class="label">${c[0]}</div><div class="value">${c[1]}</div><div class="foot">${c[2]}</div></div>`).join('');

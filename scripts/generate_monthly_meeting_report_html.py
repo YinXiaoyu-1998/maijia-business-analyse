@@ -104,7 +104,11 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
     previous_revenue = safe_sum(comparison, "previous_net_revenue")
     yoy_revenue = safe_sum(comparison, "yoy_net_revenue")
     current_customers = safe_sum(comparison, "current_customer_count")
+    previous_customers = safe_sum(comparison, "previous_customer_count")
+    yoy_customers = safe_sum(comparison, "yoy_customer_count")
     current_tables = safe_sum(comparison, "current_consumed_tables")
+    previous_tables = safe_sum(comparison, "previous_consumed_tables")
+    yoy_tables = safe_sum(comparison, "yoy_consumed_tables")
     current_orders = safe_sum(comparison, "current_positive_orders")
     current_aov = current_revenue / current_orders if current_orders else 0
     star_count = sum(1 for row in comparison if row.get("segment") == "明星门店")
@@ -130,7 +134,11 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
             "wow_pct": pct_change(current_revenue, previous_revenue),
             "yoy_pct": pct_change(current_revenue, yoy_revenue),
             "current_customers": current_customers,
+            "wow_customer_pct": pct_change(current_customers, previous_customers),
+            "yoy_customer_pct": pct_change(current_customers, yoy_customers),
             "current_tables": current_tables,
+            "wow_table_pct": pct_change(current_tables, previous_tables),
+            "yoy_table_pct": pct_change(current_tables, yoy_tables),
             "current_aov": round(current_aov, 2),
             "star_count": star_count,
             "problem_count": problem_count,
