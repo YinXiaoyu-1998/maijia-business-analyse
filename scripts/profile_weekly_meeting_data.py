@@ -195,6 +195,30 @@ DISH_DRIVER_DETAIL_FIELDS = [
     "quantity_delta",
 ]
 
+STORE_SIZE_BUCKETS = {
+    "小店": {"龙玥城店", "文化园店", "苏州街店", "常营店", "通州保利店"},
+    "大店": {"荣京道店", "经海路店", "国粹苑店", "上海沙龙店"},
+}
+
+
+def store_short_name(name: Any) -> str:
+    text = str(name or "").strip()
+    return (
+        text.replace("麦家小馆（", "")
+        .replace("麦家小馆(", "")
+        .replace("）", "")
+        .replace(")", "")
+        .strip()
+    )
+
+
+def store_size_bucket(name: Any) -> str:
+    short_name = store_short_name(name)
+    for bucket, names in STORE_SIZE_BUCKETS.items():
+        if short_name in names:
+            return bucket
+    return "未分组"
+
 
 def col_to_num(col: str) -> int:
     value = 0
@@ -813,10 +837,6 @@ def driver_pair(
 
 
 def classify_stores(comparison_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    revenues = sorted(float(row.get("current_net_revenue") or 0) for row in comparison_rows)
-    discounts = sorted(float(row.get("current_discount_rate") or 0) for row in comparison_rows)
-    aovs = sorted(float(row.get("current_post_discount_aov") or 0) for row in comparison_rows)
-
     def percentile(values: list[float], pct: float) -> float:
         if not values:
             return 0
@@ -825,12 +845,28 @@ def classify_stores(comparison_rows: list[dict[str, Any]]) -> list[dict[str, Any
         hi = min(lo + 1, len(values) - 1)
         return values[lo] * (hi - idx) + values[hi] * (idx - lo)
 
-    median_revenue = percentile(revenues, 0.5)
-    median_discount = percentile(discounts, 0.5)
-    median_aov = percentile(aovs, 0.5)
+    bucket_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in comparison_rows:
+        bucket_rows[store_size_bucket(row.get("门店名称"))].append(row)
+
+    bucket_thresholds: dict[str, dict[str, float]] = {}
+    for bucket, rows_in_bucket in bucket_rows.items():
+        revenues = sorted(float(row.get("current_net_revenue") or 0) for row in rows_in_bucket)
+        discounts = sorted(float(row.get("current_discount_rate") or 0) for row in rows_in_bucket)
+        aovs = sorted(float(row.get("current_post_discount_aov") or 0) for row in rows_in_bucket)
+        bucket_thresholds[bucket] = {
+            "median_revenue": percentile(revenues, 0.5),
+            "median_discount": percentile(discounts, 0.5),
+            "median_aov": percentile(aovs, 0.5),
+        }
 
     rows: list[dict[str, Any]] = []
     for row in comparison_rows:
+        store_size = store_size_bucket(row.get("门店名称"))
+        thresholds = bucket_thresholds[store_size]
+        median_revenue = thresholds["median_revenue"]
+        median_discount = thresholds["median_discount"]
+        median_aov = thresholds["median_aov"]
         revenue = float(row.get("current_net_revenue") or 0)
         wow = row.get("wow_net_revenue_pct")
         yoy = row.get("yoy_net_revenue_pct")
@@ -868,6 +904,7 @@ def classify_stores(comparison_rows: list[dict[str, Any]]) -> list[dict[str, Any
 
         rows.append({
             "门店名称": row["门店名称"],
+            "store_size": store_size,
             "segment": segment,
             "reason": reason,
             "revenue_threshold": fmt(median_revenue, 2),
@@ -946,6 +983,11 @@ def dish_driver_rows(
         (row["门店名称"], row["档口"], row["菜品名称"], row["channel"], row["period_key"]): row
         for row in dish_target_rows
     }
+    dish_keys_by_store_stall: dict[tuple[str, str], set[tuple[str, str, str, str]]] = defaultdict(set)
+    for store, stall, dish_name, channel, period_key in by_key:
+        if period_key in {"current", "previous", "yoy"}:
+            dish_keys_by_store_stall[(store, stall)].add((store, stall, dish_name, channel))
+
     focus = set()
     for row in stall_driver_summary:
         for direction, field in [("negative", "top_negative_stall"), ("positive", "top_positive_stall")]:
@@ -955,13 +997,8 @@ def dish_driver_rows(
 
     rows: list[dict[str, Any]] = []
     for store, basis, direction, stall in sorted(focus):
-        prefix = "wow" if basis == "环比" else "yoy"
         baseline_key = "previous" if basis == "环比" else "yoy"
-        dish_keys = sorted({
-            (dish_store, dish_stall, dish_name, channel)
-            for dish_store, dish_stall, dish_name, channel, period_key in by_key
-            if dish_store == store and dish_stall == stall and period_key in {"current", baseline_key}
-        })
+        dish_keys = sorted(dish_keys_by_store_stall.get((store, stall), set()))
         candidates: list[dict[str, Any]] = []
         for dish_store, dish_stall, dish_name, channel in dish_keys:
             current = by_key.get((dish_store, dish_stall, dish_name, channel, "current"))
