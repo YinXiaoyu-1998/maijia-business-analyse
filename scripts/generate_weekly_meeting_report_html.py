@@ -54,6 +54,42 @@ def aggregate_dayparts(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
+def hour_text(value: Any) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if ":" in text:
+        text = text.split(":", 1)[0]
+    try:
+        hour = int(float(text))
+    except ValueError:
+        return None
+    if hour < 0 or hour > 23:
+        return None
+    return f"{hour:02d}"
+
+
+def aggregate_hourly_revenue_entities(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    current_rows = [row for row in rows if row.get("period") == "本周"]
+    hours = [f"{hour:02d}" for hour in range(24)]
+
+    def build_entity(entity_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        groups = {hour: 0.0 for hour in hours}
+        for row in entity_rows:
+            hour = hour_text(row.get("时段"))
+            if hour is None:
+                continue
+            groups[hour] += float(row.get("net_revenue") or 0)
+        return [{"hour": hour, "net_revenue": round(groups[hour], 2)} for hour in hours]
+
+    stores = sorted({str(row.get("门店名称") or "") for row in current_rows if row.get("门店名称")})
+    entities = [{"key": "__all__", "label": "全体门店", "rows": build_entity(current_rows)}]
+    for store in stores:
+        store_rows = [row for row in current_rows if row.get("门店名称") == store]
+        entities.append({"key": store, "label": store, "rows": build_entity(store_rows)})
+    return entities
+
+
 def parse_report_date(value: Any) -> date | None:
     text = str(value or "").strip().replace("-", "/")
     if not text:
@@ -301,6 +337,7 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
         "segments": segments,
         "channel_by_store": channel_by_store,
         "dayparts": aggregate_dayparts([row for row in dayparts if row.get("period") in {"本周", "环比周"}]),
+        "hourly_revenue_entities": aggregate_hourly_revenue_entities(dayparts),
         "trend": aggregate_trend(weekly, current_window_end),
         "trend_entities": build_trend_comparison_entities(trend_comparison) or build_trend_entities(weekly, current_window_end),
         "trend_note": trend_note,
@@ -476,24 +513,6 @@ HTML_TEMPLATE = r'''<!doctype html>
     .tag.pressure { background: #fff5e8; color: var(--amber); }
     .tag.growth { background: #edf3ff; color: var(--blue); }
     .callout { border-left: 4px solid var(--amber); background: #fff8ef; border-radius: 0 8px 8px 0; padding: 14px 16px; color: #61420f; }
-    .heatmap { display: grid; gap: 3px; overflow: auto; padding-bottom: 8px; }
-    .heat-row { display: grid; grid-template-columns: 82px repeat(24, minmax(28px, 1fr)); gap: 3px; align-items: center; min-width: 980px; }
-    .heat-label { color: var(--muted); font-size: 12px; text-align: right; padding-right: 6px; }
-    .heat-cell { height: 24px; border-radius: 4px; background: #eef3f4; position: relative; }
-    .heat-cell:hover::after {
-      content: attr(data-tip);
-      position: absolute;
-      left: 50%;
-      bottom: 120%;
-      transform: translateX(-50%);
-      background: #111827;
-      color: #fff;
-      padding: 6px 8px;
-      border-radius: 5px;
-      white-space: nowrap;
-      z-index: 3;
-      font-size: 12px;
-    }
     @media (max-width: 980px) {
       .hero, .grid-2, .grid-3 { grid-template-columns: 1fr; }
       .grid-4, .rule-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -518,7 +537,7 @@ HTML_TEMPLATE = r'''<!doctype html>
         <a href="#channels">堂食外卖</a>
         <a href="#drivers">归因</a>
         <a href="#stalls">档口</a>
-        <a href="#dayparts">餐段</a>
+        <a href="#dayparts">时段</a>
       </nav>
     </div>
   </header>
@@ -647,11 +666,14 @@ HTML_TEMPLATE = r'''<!doctype html>
 
     <section class="section" id="dayparts">
       <div class="section-head">
-        <div><div class="kicker">07 Daypart</div><h2>餐段/时段热力：看高峰，也看环比掉点</h2></div>
+        <div><div class="kicker">07 Hourly Revenue</div><h2>时段收入：看全天高峰，也看单店节奏</h2></div>
       </div>
       <div class="panel">
-        <div class="panel-head"><h3>本周餐段 × 时段收入热力图</h3><span class="label">悬停查看收入</span></div>
-        <div id="heatmap" class="heatmap"></div>
+        <div class="panel-head">
+          <div class="panel-title-row"><h3>本周 24 小时收入分布</h3><select id="hourlyStoreSelect" class="mini-select" aria-label="选择门店时段收入"></select></div>
+          <span class="label" id="hourlyRevenueLabel">本周，整体业务收入（万元）</span>
+        </div>
+        <div id="hourlyRevenueBar" class="chart"></div>
       </div>
       <div class="callout" style="margin-top:16px;" id="dataGaps"></div>
     </section>
@@ -671,6 +693,7 @@ HTML_TEMPLATE = r'''<!doctype html>
     const cleanName = s => String(s || '').replace('麦家小馆（', '').replace('）', '');
     const colors = { teal:'#006d77', blue:'#2f5b9f', green:'#3a7d44', amber:'#b85c00', red:'#b23a48', violet:'#7557a6', orange:'#d96b3b' };
     let selectedTrendKey = '__all__';
+    let selectedHourlyKey = '__all__';
     const currentTrendYear = String(data.meta?.target_windows?.current?.end || '').slice(0, 4) || '本年';
     const yoyTrendYear = String(data.meta?.target_windows?.yoy?.end || '').slice(0, 4) || '同期';
 
@@ -1090,17 +1113,72 @@ HTML_TEMPLATE = r'''<!doctype html>
           <div class="table-wrap"><table><thead><tr><th>门店</th><th>口径</th><th>负向档口</th><th>负向变化</th><th>负向代表菜品</th><th>正向档口</th><th>正向变化</th><th>正向代表菜品</th></tr></thead><tbody>${rowHtml(yoyDrivers)}</tbody></table></div>
         </div>`;
     }
-    function renderHeatmap() {
-      const rows = data.dayparts.filter(r => r.period === '本周');
-      const periods = [...new Set(rows.map(r => r['餐段']))];
-      const hours = Array.from({length:24}, (_,i)=>String(i).padStart(2,'0'));
+    function hourlyEntity() {
+      const entities = data.hourly_revenue_entities || [{key:'__all__', label:'全体门店', rows:[]}];
+      return entities.find(item => item.key === selectedHourlyKey) || entities[0];
+    }
+    function renderHourlySelector() {
+      const select = document.getElementById('hourlyStoreSelect');
+      const entities = data.hourly_revenue_entities || [{key:'__all__', label:'全体门店', rows:[]}];
+      select.innerHTML = entities.map(item => `<option value="${item.key}">${cleanName(item.label)}</option>`).join('');
+      select.value = selectedHourlyKey;
+      select.addEventListener('change', () => {
+        selectedHourlyKey = select.value;
+        renderHourlyRevenueBar();
+      });
+    }
+    function renderHourlyRevenueBar() {
+      const el = document.getElementById('hourlyRevenueBar');
+      const entity = hourlyEntity();
+      const rows = entity.rows || [];
+      const isAllStores = entity.key === '__all__';
+      document.getElementById('hourlyRevenueLabel').textContent = `本周，${isAllStores ? '整体' : cleanName(entity.label)}业务收入（万元）`;
+      const w = 1120, h = 350, left = 74, right = 34, top = 34, bottom = 62;
       const max = Math.max(...rows.map(r => Number(r.net_revenue || 0)), 1);
-      const byKey = new Map(rows.map(r => [`${r['餐段']}|${String(r['时段']).slice(0,2)}`, Number(r.net_revenue || 0)]));
-      document.getElementById('heatmap').innerHTML = [`<div class="heat-row"><div></div>${hours.map(h=>`<div class="label" style="text-align:center;">${h}</div>`).join('')}</div>`].concat(periods.map(p => `<div class="heat-row"><div class="heat-label">${p}</div>${hours.map(h => {
-        const v = byKey.get(`${p}|${h}`) || 0;
-        const alpha = .08 + Math.min(.82, v / max * .82);
-        return `<div class="heat-cell" data-tip="${p} ${h}:00 ${fmtWan(v)}" style="background:rgba(0,109,119,${alpha})"></div>`;
-      }).join('')}</div>`)).join('');
+      const yMax = Math.ceil(max / 10000) * 10000 || 1;
+      const yScale = v => h - bottom - Number(v || 0) / yMax * (h - top - bottom);
+      const plotW = w - left - right;
+      const slot = plotW / 24;
+      const barW = Math.max(12, Math.min(28, slot * .64));
+      const root = svg('svg', {viewBox:`0 0 ${w} ${h}`});
+      const tip = document.createElement('div');
+      tip.className = 'chart-tooltip';
+      const showTip = (event, row) => {
+        const bounds = el.getBoundingClientRect();
+        tip.innerHTML = `<strong>${Number(row.hour)}点</strong>业务收入：${fmtWan(row.net_revenue)}`;
+        tip.style.left = `${event.clientX - bounds.left + 12}px`;
+        tip.style.top = `${event.clientY - bounds.top - 14}px`;
+        tip.style.display = 'block';
+      };
+      const hideTip = () => { tip.style.display = 'none'; };
+      [0, .25, .5, .75, 1].forEach(t => {
+        const value = yMax * t;
+        const y = yScale(value);
+        root.appendChild(svg('line', {x1:left, y1:y, x2:w-right, y2:y, stroke:'#e6edf3'}));
+        root.appendChild(svg('text', {x:left-10, y:y+4, 'text-anchor':'end', 'font-size':'11', fill:'#657386'})).textContent = fmtWan(value);
+      });
+      root.appendChild(svg('line', {x1:left, y1:top, x2:left, y2:h-bottom, stroke:'#9aa7b5'}));
+      root.appendChild(svg('line', {x1:left, y1:h-bottom, x2:w-right, y2:h-bottom, stroke:'#9aa7b5'}));
+      rows.forEach((row, i) => {
+        const value = Number(row.net_revenue || 0);
+        const x = left + i * slot + (slot - barW) / 2;
+        const y = yScale(value);
+        const height = h - bottom - y;
+        const bar = svg('rect', {x, y, width:barW, height:Math.max(1, height), rx:4, fill:colors.teal, opacity:.9, style:'cursor:pointer'});
+        const title = svg('title', {});
+        title.textContent = `${Number(row.hour)}点 业务收入：${fmtWan(value)}`;
+        bar.appendChild(title);
+        bar.addEventListener('mousemove', event => showTip(event, row));
+        bar.addEventListener('mouseleave', hideTip);
+        root.appendChild(bar);
+        root.appendChild(svg('text', {x:x+barW/2, y:h-38, 'text-anchor':'middle', 'font-size':'10', fill:'#657386'})).textContent = `${Number(row.hour)}点`;
+      });
+      const peak = rows.reduce((best, row) => Number(row.net_revenue || 0) > Number(best.net_revenue || 0) ? row : best, rows[0] || {hour:'00', net_revenue:0});
+      root.appendChild(svg('text', {x:left, y:18, 'font-size':'12', fill:'#657386', 'font-weight':'700'})).textContent = '业务收入（万元）';
+      root.appendChild(svg('text', {x:w-right, y:18, 'text-anchor':'end', 'font-size':'11', fill:'#657386'})).textContent = `峰值：${Number(peak.hour)}点 ${fmtWan(peak.net_revenue)}`;
+      el.innerHTML = '';
+      el.appendChild(root);
+      el.appendChild(tip);
     }
     function renderGaps() {
       document.getElementById('dataGaps').innerHTML = `<b>数据未覆盖：</b>${data.data_gaps.join('；')}`;
@@ -1119,7 +1197,8 @@ HTML_TEMPLATE = r'''<!doctype html>
     renderDriverBar();
     renderActions();
     renderStallAttribution();
-    renderHeatmap();
+    renderHourlySelector();
+    renderHourlyRevenueBar();
     renderGaps();
   </script>
 </body>

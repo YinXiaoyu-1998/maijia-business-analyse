@@ -26,7 +26,7 @@ Use this skill to run the Maijia Xiaoguan operating-data workflow end to end:
 - `scripts/generate_business_report_html.py`: render a self-contained HTML diagnosis report from the fact tables.
 - `scripts/run_pipeline.py`: execute profiling and HTML generation in one command.
 - `scripts/profile_weekly_meeting_data.py`: stream-read weekly meeting business/dish/catalog inputs into comparison and attribution fact tables.
-- `scripts/generate_weekly_meeting_report_html.py`: render the full weekly meeting HTML with trend, quadrant, channel, driver, daypart, and optional stall attribution sections.
+- `scripts/generate_weekly_meeting_report_html.py`: render the full weekly meeting HTML with trend, quadrant, channel, driver, hourly revenue, and optional stall attribution sections.
 - `scripts/run_weekly_meeting_report.py`: execute the weekly meeting profiling and full HTML generation in one command.
 - `scripts/profile_monthly_meeting_data.py`: stream-read monthly meeting business/dish/catalog inputs into month-level comparison, 6-month trend, and attribution fact tables.
 - `scripts/generate_monthly_meeting_report_html.py`: render the full monthly meeting HTML with month-level trend, quadrant, channel, driver, daypart, and optional stall attribution sections.
@@ -211,7 +211,7 @@ Weekly meeting fact tables:
 
 - `weekly_store_metrics.csv`
 - `weekly_store_channel_metrics.csv`
-- `weekly_store_daypart_metrics.csv`
+- `weekly_store_daypart_metrics.csv` for the weekly report's store-selectable 24-hour revenue chart; the HTML aggregates this by `时段` only and does not display the `餐段` dimension.
 - `weekly_trend_comparison_metrics.csv`
 - `weekly_store_comparison.csv`
 - `store_driver_summary.csv`
@@ -249,7 +249,7 @@ Use this default structure:
 3. Overall operating baseline: revenue, orders, discount, AOV, membership.
 4. Store portfolio: ranking, segmentation, outliers, replication opportunities.
 5. Channel quality: dine-in, delivery, pickup, platforms, discount intensity.
-6. Daypart opportunities: hour/daypart heatmap and peak/off-peak actions.
+6. Hourly revenue opportunities: 24-hour revenue bar chart, with a dropdown for all stores or each single store, and peak/off-peak actions.
 7. Dish/stall drilldown when `自助菜品取数` and `菜品库` are available: explain which `基础分类` stalls drive revenue gain/loss and list the top dishes behind each movement.
 8. Opportunity pool: 30/60/90 day actions with evidence strength.
 
@@ -275,6 +275,6 @@ python3 maijia-business-analyse/scripts/generate_business_report_html.py --help
 Open the HTML report in a browser and check:
 
 - It displays the requested company, date period, row count, store count, and source file.
-- Heatmaps and bar charts do not overlap.
+- Hourly bar charts, trend charts, heatmaps, and tables do not overlap.
 - Tables are scrollable and sortable.
 - The report does not expose raw row-level data unnecessarily.
