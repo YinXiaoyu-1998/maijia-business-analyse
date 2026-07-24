@@ -248,6 +248,11 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
         self.assertIn("renderDishSalesMix", report.HTML_TEMPLATE)
         self.assertIn("销售额菜品比例", report.HTML_TEMPLATE)
 
+    def test_template_clamps_chart_tooltips_inside_chart_container(self) -> None:
+        self.assertIn("function positionTooltip", report.HTML_TEMPLATE)
+        self.assertIn("bounds.width - tipWidth - 8", report.HTML_TEMPLATE)
+        self.assertNotIn("event.clientX - bounds.left + 12", report.HTML_TEMPLATE)
+
 
 if __name__ == "__main__":
     unittest.main()
