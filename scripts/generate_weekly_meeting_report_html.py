@@ -623,7 +623,9 @@ HTML_TEMPLATE = r'''<!doctype html>
       font-size: 12px;
       line-height: 1.35;
       box-shadow: 0 8px 20px rgba(17, 24, 39, .18);
-      white-space: nowrap;
+      max-width: min(280px, calc(100% - 16px));
+      white-space: normal;
+      overflow-wrap: anywhere;
     }
     .chart-tooltip strong { display: block; margin-bottom: 2px; color: #fff; }
     .legend { display: flex; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 12px; margin-top: 8px; }
@@ -855,6 +857,24 @@ HTML_TEMPLATE = r'''<!doctype html>
       Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
       return el;
     }
+    function positionTooltip(tip, container, event, options = {}) {
+      const bounds = container.getBoundingClientRect();
+      const gap = options.gap ?? 12;
+      const cursorX = Number.isFinite(event.clientX) ? event.clientX - bounds.left : bounds.width / 2;
+      const cursorY = Number.isFinite(event.clientY) ? event.clientY - bounds.top : bounds.height / 2;
+      tip.style.display = 'block';
+      tip.style.left = '0px';
+      tip.style.top = '0px';
+      const tipWidth = tip.offsetWidth || 0;
+      const tipHeight = tip.offsetHeight || 0;
+      let x = cursorX + gap;
+      let y = cursorY - tipHeight / 2;
+      if (x + tipWidth + 8 > bounds.width) x = cursorX - tipWidth - gap;
+      x = Math.max(8, Math.min(x, bounds.width - tipWidth - 8));
+      y = Math.max(8, Math.min(y, bounds.height - tipHeight - 8));
+      tip.style.left = `${x}px`;
+      tip.style.top = `${y}px`;
+    }
     function renderMeta() {
       const meta = data.meta;
       document.getElementById('metaChips').innerHTML = [
@@ -1060,11 +1080,8 @@ HTML_TEMPLATE = r'''<!doctype html>
       const tip = document.createElement('div');
       tip.className = 'chart-tooltip';
       const showTrendTip = (event, seriesLabel, weekLabel, weekRange, value) => {
-        const bounds = el.getBoundingClientRect();
         tip.innerHTML = `<strong>${seriesLabel}</strong>${weekRange || weekLabel}<br>业务收入：${fmtWan(value)}`;
-        tip.style.left = `${event.clientX - bounds.left + 12}px`;
-        tip.style.top = `${event.clientY - bounds.top - 14}px`;
-        tip.style.display = 'block';
+        positionTooltip(tip, el, event);
       };
       const hideTrendTip = () => { tip.style.display = 'none'; };
       [0, .25, .5, .75, 1].forEach(t => {
@@ -1260,11 +1277,8 @@ HTML_TEMPLATE = r'''<!doctype html>
             style:'cursor:pointer'
           });
           slice.addEventListener('mousemove', event => {
-            const bounds = pie.getBoundingClientRect();
             tip.innerHTML = `<strong>${row.name}</strong>${fmtWan(value)}<br>占比：${fmtPct(row.share)}`;
-            tip.style.left = `${event.clientX - bounds.left + 12}px`;
-            tip.style.top = `${event.clientY - bounds.top - 16}px`;
-            tip.style.display = 'block';
+            positionTooltip(tip, pie, event);
           });
           slice.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
           root.appendChild(slice);
@@ -1458,11 +1472,8 @@ HTML_TEMPLATE = r'''<!doctype html>
       const tip = document.createElement('div');
       tip.className = 'chart-tooltip';
       const showTip = (event, row) => {
-        const bounds = el.getBoundingClientRect();
         tip.innerHTML = `<strong>${Number(row.hour)}点</strong>业务收入：${fmtWan(row.net_revenue)}`;
-        tip.style.left = `${event.clientX - bounds.left + 12}px`;
-        tip.style.top = `${event.clientY - bounds.top - 14}px`;
-        tip.style.display = 'block';
+        positionTooltip(tip, el, event);
       };
       const hideTip = () => { tip.style.display = 'none'; };
       [0, .25, .5, .75, 1].forEach(t => {
