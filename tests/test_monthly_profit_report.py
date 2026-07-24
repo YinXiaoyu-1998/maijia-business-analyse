@@ -50,6 +50,9 @@ class MonthlyProfitReportTest(unittest.TestCase):
         self.assertTrue(all(item["value"] is None for item in months))
         self.assertIn(".dot[data-month]", report.HTML_TEMPLATE)
         self.assertNotIn("month-hit", report.HTML_TEMPLATE)
+        self.assertIn("min-dot", report.HTML_TEMPLATE)
+        self.assertIn("max-dot", report.HTML_TEMPLATE)
+        self.assertNotIn("negative-dot", report.HTML_TEMPLATE)
         self.assertIn("select", report.HTML_TEMPLATE)
 
 
