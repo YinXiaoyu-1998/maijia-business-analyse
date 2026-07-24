@@ -211,6 +211,21 @@ DAYPART_DRIVER_SUMMARY_FIELDS = [
     "daypart_signal",
 ]
 
+DINE_IN_DISH_CHANNEL = "店内销售"
+ALL_STORES_LABEL = "全体门店"
+
+DISH_SALES_MIX_FIELDS = [
+    "period_key",
+    "period_label",
+    "门店名称",
+    "菜品名称",
+    "dish_income",
+    "dish_sales",
+    "quantity",
+    "dine_in_revenue",
+    "share",
+]
+
 STORE_SIZE_BUCKETS = {
     "小店": {"龙玥城店", "文化园店", "苏州街店", "常营店", "通州保利店"},
     "大店": {"荣京道店", "经海路店", "国粹苑店", "上海沙龙店"},
@@ -1293,6 +1308,166 @@ def profile_dish_inputs(
     }
 
 
+def build_dine_in_revenue_map(target_rows: list[dict[str, Any]]) -> dict[tuple[str, str], float]:
+    revenue_by_period_store: dict[tuple[str, str], float] = defaultdict(float)
+    for row in target_rows:
+        period_key = str(row.get("period_key") or "")
+        store = str(row.get("门店名称") or "")
+        if not period_key or not store:
+            continue
+        revenue = safe_float(row.get("dine_in_revenue"))
+        revenue_by_period_store[(period_key, store)] += revenue
+        revenue_by_period_store[(period_key, ALL_STORES_LABEL)] += revenue
+    return dict(revenue_by_period_store)
+
+
+def profile_dish_sales_mix(
+    dish_inputs: list[Path] | None,
+    output_dir: Path,
+    target_windows: dict[str, tuple[str, date, date]],
+    dine_in_revenue_by_period_store: dict[tuple[str, str], float],
+    output_prefix: str = "weekly",
+) -> dict[str, Any]:
+    output_name = f"{output_prefix}_store_dish_sales_mix.csv"
+    if not dish_inputs:
+        return {
+            "enabled": False,
+            "reason": "未提供菜品主题数据，未生成销售额菜品比例。",
+            "outputs": [],
+        }
+
+    inspections = [inspect_dish_workbook(path) for path in dish_inputs]
+    later_dates: list[set[date]] = []
+    union_later: set[date] = set()
+    for info in reversed(inspections):
+        later_dates.append(set(union_later))
+        union_later.update(info["dates"])
+    later_dates = list(reversed(later_dates))
+
+    groups: dict[tuple[str, str, str, str], dict[str, Any]] = defaultdict(new_dish_agg)
+    period_counts: dict[str, int] = defaultdict(int)
+    period_dates: dict[str, set[date]] = defaultdict(set)
+    income_by_period_store: dict[tuple[str, str], float] = defaultdict(float)
+    processed_dates: set[date] = set()
+    processed_rows = 0
+    skipped_duplicate_rows = 0
+    skipped_out_of_scope_rows = 0
+    skipped_non_dine_in_rows = 0
+    skipped_out_of_scope_files: list[str] = []
+    target_dates = dates_for_target_windows(target_windows)
+
+    for index, path in enumerate(dish_inputs):
+        if inspections[index]["dates"] and set(inspections[index]["dates"]).isdisjoint(target_dates):
+            skipped_out_of_scope_files.append(str(path))
+            continue
+        excluded_dates = later_dates[index]
+        headers: list[str] = []
+        current_sheet = ""
+        sheet_title = ""
+        for sheet, row_number, values in read_workbook_sheet_rows(path):
+            if sheet["path"] != current_sheet:
+                current_sheet = sheet["path"]
+                sheet_title = ""
+                headers = []
+            if row_number == 1:
+                sheet_title = values.get(1, "")
+                continue
+            if sheet_title != "菜品主题数据":
+                continue
+            if row_number == 3:
+                headers = [values.get(col, "") for col in range(1, max(values) + 1)]
+                continue
+            if row_number < 4 or not headers or not values:
+                continue
+            row = row_dict(headers, values)
+            parsed_date = parse_date(row.get("营业日", ""))
+            if not parsed_date:
+                continue
+            if parsed_date in excluded_dates:
+                skipped_duplicate_rows += 1
+                continue
+            period_key = target_period_for(parsed_date, target_windows)
+            if not period_key:
+                skipped_out_of_scope_rows += 1
+                continue
+            if str(row.get("订单分类") or "").strip() != DINE_IN_DISH_CHANNEL:
+                skipped_non_dine_in_rows += 1
+                continue
+
+            period_label = target_windows[period_key][0]
+            store = row.get("门店", "") or "未知门店"
+            dish_name = row.get("菜品名称", "") or "未知菜品"
+            income = safe_float(row.get("菜品收入"))
+            processed_rows += 1
+            processed_dates.add(parsed_date)
+            period_counts[period_key] += 1
+            period_dates[period_key].add(parsed_date)
+            income_by_period_store[(period_key, store)] += income
+            income_by_period_store[(period_key, ALL_STORES_LABEL)] += income
+
+            add_to_dish_agg(groups[(period_key, period_label, store, dish_name)], row, parsed_date)
+            add_to_dish_agg(groups[(period_key, period_label, ALL_STORES_LABEL, dish_name)], row, parsed_date)
+
+    rows: list[dict[str, Any]] = []
+    for (period_key, period_label, store, dish_name), agg in groups.items():
+        sums = agg["sums"]
+        denominator = dine_in_revenue_by_period_store.get((period_key, store), 0.0)
+        rows.append({
+            "period_key": period_key,
+            "period_label": period_label,
+            "门店名称": store,
+            "菜品名称": dish_name,
+            "dish_income": fmt(sums["income"], 2),
+            "dish_sales": fmt(sums["sales"], 2),
+            "quantity": fmt(sums["quantity"], 2),
+            "dine_in_revenue": fmt(denominator, 2),
+            "share": fmt(safe_div(sums["income"], denominator), 6),
+        })
+    rows.sort(key=lambda row: (str(row["period_key"]), str(row["门店名称"]), -float(row.get("dish_income") or 0), str(row["菜品名称"])))
+    write_csv(output_dir / output_name, rows, DISH_SALES_MIX_FIELDS)
+
+    current_key = "current"
+    current_revenue = dine_in_revenue_by_period_store.get((current_key, ALL_STORES_LABEL), 0.0)
+    current_income = income_by_period_store.get((current_key, ALL_STORES_LABEL), 0.0)
+    return {
+        "enabled": bool(rows) and current_income > 0,
+        "basis": "分母=营业分组表「店内营业收入」；分子=菜品主题数据中「订单分类=店内销售」的「菜品收入」。",
+        "inputs": [
+            {
+                "path": info["path"],
+                "title": info["title"],
+                "sheet_count": info["sheet_count"],
+                "header_count": info["header_count"],
+                "min_date": date_text(info["min_date"]) if info["min_date"] else None,
+                "max_date": date_text(info["max_date"]) if info["max_date"] else None,
+            }
+            for info in inspections
+        ],
+        "processed_rows": processed_rows,
+        "processed_date_start": date_text(min(processed_dates)) if processed_dates else None,
+        "processed_date_end": date_text(max(processed_dates)) if processed_dates else None,
+        "skipped_duplicate_rows": skipped_duplicate_rows,
+        "skipped_out_of_scope_rows": skipped_out_of_scope_rows,
+        "skipped_non_dine_in_rows": skipped_non_dine_in_rows,
+        "skipped_out_of_scope_files": skipped_out_of_scope_files,
+        "current_business_dine_in_revenue": fmt(current_revenue, 2),
+        "current_dish_dine_in_income": fmt(current_income, 2),
+        "current_reconciliation_delta": fmt(current_income - current_revenue, 2),
+        "period_coverage": {
+            key: {
+                "label": label,
+                "rows": period_counts.get(key, 0),
+                "date_start": date_text(min(period_dates[key])) if period_dates.get(key) else None,
+                "date_end": date_text(max(period_dates[key])) if period_dates.get(key) else None,
+                "business_dine_in_revenue": fmt(dine_in_revenue_by_period_store.get((key, ALL_STORES_LABEL), 0.0), 2),
+                "dish_dine_in_income": fmt(income_by_period_store.get((key, ALL_STORES_LABEL), 0.0), 2),
+            }
+            for key, (label, _start, _end) in target_windows.items()
+        },
+        "outputs": [output_name],
+    }
+
+
 def profile(
     inputs: list[Path],
     output_dir: Path,
@@ -1464,6 +1639,13 @@ def profile(
     star_rows = classify_stores(comparison_rows)
     daypart_comparison_rows = compare_store_dayparts(daypart_rows, target_windows)
     daypart_driver_rows = store_daypart_driver_rows(daypart_comparison_rows)
+    dish_sales_mix_meta = profile_dish_sales_mix(
+        dish_inputs,
+        output_dir,
+        target_windows,
+        build_dine_in_revenue_map(target_rows),
+        output_prefix="weekly",
+    )
 
     write_csv(output_dir / "weekly_store_metrics.csv", weekly_rows, ["week_start", "week_end", "week_label", "门店名称", "城市", "商户号"] + METRIC_FIELDS)
     write_csv(output_dir / "weekly_store_channel_metrics.csv", channel_rows, ["week_start", "week_end", "week_label", "门店名称", "城市", "商户号", "period", "channel"] + METRIC_FIELDS)
@@ -1491,8 +1673,6 @@ def profile(
     write_csv(output_dir / "weekly_store_comparison.csv", comparison_rows, comparison_fields)
     write_csv(output_dir / "store_driver_summary.csv", driver_rows, list(driver_rows[0].keys()) if driver_rows else [])
     write_csv(output_dir / "star_problem_stores.csv", star_rows, list(star_rows[0].keys()) if star_rows else [])
-
-    ignored_stall_inputs = bool(dish_inputs or catalog_path)
 
     summary = {
         "meta": {
@@ -1523,6 +1703,7 @@ def profile(
                 "weekly_store_daypart_metrics.csv",
                 "weekly_store_daypart_comparison.csv",
                 "weekly_store_daypart_driver_summary.csv",
+                *dish_sales_mix_meta.get("outputs", []),
                 "weekly_trend_comparison_metrics.csv",
                 "weekly_store_comparison.csv",
                 "store_driver_summary.csv",
@@ -1537,6 +1718,7 @@ def profile(
                     "weekly_store_daypart_driver_summary.csv",
                 ],
             },
+            "dish_sales_mix": dish_sales_mix_meta,
         },
         "comparison": comparison_rows,
         "drivers": driver_rows,
@@ -1549,8 +1731,12 @@ def profile(
             "当前营业分组表没有网评分数、评论文本字段，不能做网评分数和词云分析。",
             "时段归因基于营业分组表「时段」字段，可定位收入变化发生在哪些时段；不直接解释菜品或现场运营原因。",
             *(
-                ["已提供菜品或菜品库输入，但新周报逻辑已用时段归因替代档口/菜品归因，未生成档口归因表。"]
-                if ignored_stall_inputs else []
+                [dish_sales_mix_meta.get("reason", "未提供菜品主题数据，未生成销售额菜品比例。")]
+                if not dish_sales_mix_meta.get("enabled") else []
+            ),
+            *(
+                ["已提供菜品库输入，但销售额菜品比例不需要菜品库；菜品库仅用于旧档口归因逻辑，本次已忽略。"]
+                if catalog_path else []
             ),
         ],
     }
