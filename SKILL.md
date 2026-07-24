@@ -217,7 +217,7 @@ Metric rules:
 
 - Preserve blank profit-workbook cells as `无数据／门店尚未开业`; do not convert them to zero or connect the line across them.
 - Keep the X-axis fixed at January through December for every selected year.
-- Calculate a monthly profit rate only after summing `营业额(元)` across every business-export detail row for the matching store and natural month: `净利润 ÷ 当月营业额汇总`.
+- Calculate a monthly profit rate only after summing `店内营业收入` across every business-export detail row for the matching store and natural month: `净利润 ÷ 当月店内营业收入汇总`.
 - Never average detail-row rates or precomputed rates.
 - Map user-provided profit-sheet store labels explicitly to business-export store names. For the current 麦家小馆 convention: `保利店 -> 门店名称包含通州保利`.
 - If business data begins partway through a month, leave that month’s profit rate blank unless the user explicitly requests a partial-month rate. For the current data set, keep 2024-06 and earlier blank.
