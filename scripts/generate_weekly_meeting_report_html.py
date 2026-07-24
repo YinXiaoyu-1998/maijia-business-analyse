@@ -182,6 +182,38 @@ def median(values: list[float]) -> float:
     return (clean[mid - 1] + clean[mid]) / 2
 
 
+STORE_SIZE_ORDER = ["大店", "小店", "未分组"]
+
+
+def build_segment_groups(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    groups: list[dict[str, Any]] = []
+    for store_size in STORE_SIZE_ORDER:
+        bucket_rows = [row for row in rows if row.get("store_size") == store_size]
+        if not bucket_rows:
+            continue
+        segment_counts: dict[str, int] = {}
+        for row in bucket_rows:
+            segment = str(row.get("segment") or "未分型")
+            segment_counts[segment] = segment_counts.get(segment, 0) + 1
+        thresholds = [
+            float(row.get("revenue_threshold") or 0)
+            for row in bucket_rows
+            if row.get("revenue_threshold") not in {None, ""}
+        ]
+        groups.append({
+            "key": store_size,
+            "label": store_size,
+            "store_count": len(bucket_rows),
+            "star_count": segment_counts.get("明星门店", 0),
+            "problem_count": segment_counts.get("问题门店", 0),
+            "segment_counts": segment_counts,
+            "revenue_threshold": round(thresholds[0] if thresholds else median([float(row.get("current_net_revenue") or 0) for row in bucket_rows]), 2),
+            "growth_threshold": 0,
+            "rows": sorted(bucket_rows, key=lambda row: float(row.get("current_net_revenue") or 0), reverse=True),
+        })
+    return groups
+
+
 def metric_lookup(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return {str(row.get("metric") or ""): row.get("value") for row in rows}
 
@@ -241,6 +273,9 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
         driver = driver_by_store.get(row["门店名称"], {})
         stall_driver = next((item for item in stall_drivers if item.get("门店名称") == row["门店名称"] and item.get("basis") == "环比"), {})
         row["segment"] = segment.get("segment", "未分型")
+        row["store_size"] = segment.get("store_size", "未分组")
+        row["revenue_threshold"] = segment.get("revenue_threshold")
+        row["growth_threshold"] = segment.get("growth_threshold")
         row["segment_reason"] = segment.get("reason", "")
         row["top_negative_factor"] = driver.get("top_negative_factor", "")
         row["top_stall_signal"] = stall_driver.get("stall_signal", "")
@@ -262,6 +297,7 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
     current_aov = current_revenue / safe_sum(comparison, "current_positive_orders") if safe_sum(comparison, "current_positive_orders") else 0
     star_count = sum(1 for row in comparison if row.get("segment") == "明星门店")
     problem_count = sum(1 for row in comparison if row.get("segment") == "问题门店")
+    segment_groups = build_segment_groups(comparison)
     revenue_threshold = median([float(row.get("current_net_revenue") or 0) for row in comparison])
     current_window_end = parse_report_date(summary["meta"]["target_windows"]["current"]["end"])
     yoy_window_end = parse_report_date(summary["meta"]["target_windows"]["yoy"]["end"])
@@ -332,6 +368,7 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
             ],
             "warnings": "同比下滑超过 25%、环比下滑超过 8%、折扣率高于门店中位水平 20% 以上、客单价低于门店中位水平 10% 以上，会作为预警补充到门店原因中。",
         },
+        "segment_groups": segment_groups,
         "comparison": comparison,
         "drivers": [row for row in drivers if row.get("basis") == "环比"],
         "segments": segments,
@@ -573,11 +610,11 @@ HTML_TEMPLATE = r'''<!doctype html>
       </div>
       <div class="grid-2">
         <div class="panel">
-          <div class="panel-head"><h3>本周门店业务收入排名</h3><span class="label">订单营业收入</span></div>
+          <div class="panel-head"><h3>本周门店业务收入排名</h3><span class="label">按大店 / 小店分别看</span></div>
           <div class="chart" id="revenueBar"></div>
         </div>
         <div class="panel">
-          <div class="panel-head"><h3>明星与问题门店四象限</h3><span class="label">虚线：环比 0% / 收入中位数</span></div>
+          <div class="panel-head"><h3>明星与问题门店四象限</h3><span class="label">各 bucket 内收入中位数</span></div>
           <div class="chart" id="scatter"></div>
         </div>
       </div>
@@ -603,6 +640,7 @@ HTML_TEMPLATE = r'''<!doctype html>
         <table id="storeTable">
           <thead><tr>
             <th data-key="门店名称">门店</th>
+            <th data-key="store_size">门店类型</th>
             <th data-key="segment">分型</th>
             <th data-key="current_net_revenue">业务收入</th>
             <th data-key="wow_net_revenue_pct">环比</th>
@@ -645,7 +683,7 @@ HTML_TEMPLATE = r'''<!doctype html>
         <p class="note">归因为近似拆解，用于周会定位复盘方向，不替代门店现场判断。</p>
       </div>
       <div class="panel">
-        <div class="panel-head"><h3>Top 问题门店环比归因</h3><span class="label">量贡献 vs 价贡献</span></div>
+        <div class="panel-head"><h3>问题门店环比归因</h3><span class="label">大店 / 小店分别看量贡献 vs 价贡献</span></div>
         <div class="chart" id="driverBar"></div>
       </div>
       <div class="full-row">
@@ -692,6 +730,7 @@ HTML_TEMPLATE = r'''<!doctype html>
     const fmtPct = v => v === null || v === undefined || v === '' ? 'N/A' : `${(Number(v) * 100).toFixed(1)}%`;
     const cleanName = s => String(s || '').replace('麦家小馆（', '').replace('）', '');
     const colors = { teal:'#006d77', blue:'#2f5b9f', green:'#3a7d44', amber:'#b85c00', red:'#b23a48', violet:'#7557a6', orange:'#d96b3b', yellow:'#c89b18', yellowFill:'#f2c94c', maximum:'#2f80ed', maximumStroke:'#1c5fb8', minimum:'#e5484d', minimumStroke:'#b42318' };
+    const segmentGroups = data.segment_groups || [];
     let selectedTrendKey = '__all__';
     let selectedHourlyKey = '__all__';
     const currentTrendYear = String(data.meta?.target_windows?.current?.end || '').slice(0, 4) || '本年';
@@ -722,7 +761,7 @@ HTML_TEMPLATE = r'''<!doctype html>
         ['业务收入', fmtWan(k.current_revenue), `环比 ${fmtPct(k.wow_pct)} / 同比 ${fmtPct(k.yoy_pct)}`],
         ['客流量', fmtNum(k.current_customers), `环比 ${fmtPct(k.wow_customer_pct)} / 同比 ${fmtPct(k.yoy_customer_pct)}`],
         ['开台数', fmtNum(k.current_tables), `环比 ${fmtPct(k.wow_table_pct)} / 同比 ${fmtPct(k.yoy_table_pct)}`],
-        ['门店分型', `${k.star_count} 明星 / ${k.problem_count} 问题`, '按收入中位数与环比 0% 划分象限']
+        ['门店分型', `${k.star_count} 明星 / ${k.problem_count} 问题`, segmentGroups.map(g => `${g.label} ${g.star_count} 明星/${g.problem_count} 问题`).join('；') || '按门店类型内收入中位数与环比 0% 划分象限']
       ];
       document.getElementById('kpiCards').innerHTML = cards.map(c => `<div class="card"><div class="label">${c[0]}</div><div class="value">${c[1]}</div><div class="foot">${c[2]}</div></div>`).join('');
     }
@@ -731,8 +770,9 @@ HTML_TEMPLATE = r'''<!doctype html>
     }
     function renderRules() {
       const rules = data.segment_rules;
+      const bucketSegmentSummary = segmentGroups.map(group => `${group.label}：收入中位数 ${fmtWan(group.revenue_threshold)}，${group.star_count} 明星 / ${group.problem_count} 问题`).join('；');
       document.getElementById('segmentRules').innerHTML = `
-        <div class="rule-note">门店分型基准：纵轴使用本周业务收入门店中位数 ${fmtWan(rules.revenue_threshold)}，横轴使用环比增长率 ${fmtPct(rules.growth_threshold)}。四象限只定义经营位置，预警项用于补充复盘优先级。</div>
+        <div class="rule-note" id="bucketSegmentSummary">门店分型基准：大店只和大店比较，小店只和小店比较；${bucketSegmentSummary}。横轴统一使用环比增长率 ${fmtPct(rules.growth_threshold)}。四象限只定义经营位置，预警项用于补充复盘优先级。</div>
         <div class="rule-grid">
           ${rules.items.map(item => `<div class="rule">
             <div class="rule-title"><i class="dot" style="background:${ruleColor(item.name)}"></i>${item.name}</div>
@@ -754,6 +794,33 @@ HTML_TEMPLATE = r'''<!doctype html>
         root.appendChild(svg('text', {x: left - 8, y: y + 15, 'text-anchor':'end', 'font-size':'12', fill:'#344054'})).textContent = cleanName(r['门店名称']);
         root.appendChild(svg('rect', {x: left, y, width: bw, height: 18, rx: 4, fill: color}));
         root.appendChild(svg('text', {x: left + bw + 8, y: y + 14, 'font-size':'12', fill:'#657386'})).textContent = formatter(val);
+      });
+      el.innerHTML = '';
+      el.appendChild(root);
+    }
+    function renderBucketedRevenueRanking() {
+      const el = document.getElementById('revenueBar');
+      const groups = segmentGroups.length ? segmentGroups : [{label:'全体门店', rows:stores}];
+      const w = 760, left = 150, right = 80, groupGap = 40;
+      const rowH = 30;
+      const totalRows = groups.reduce((sum, group) => sum + (group.rows || []).length, 0);
+      const h = Math.max(320, totalRows * rowH + groups.length * groupGap + 36);
+      const max = Math.max(...groups.flatMap(group => (group.rows || []).map(r => Number(r.current_net_revenue || 0))), 1);
+      const root = svg('svg', {viewBox:`0 0 ${w} ${h}`});
+      let y = 26;
+      groups.forEach(group => {
+        root.appendChild(svg('text', {x:left-8, y:y, 'text-anchor':'end', 'font-size':'12', fill:'#172033', 'font-weight':'800'})).textContent = `${group.label}（${group.store_count || (group.rows || []).length}家）`;
+        root.appendChild(svg('text', {x:left, y:y, 'font-size':'11', fill:'#657386'})).textContent = `中位数 ${fmtWan(group.revenue_threshold || 0)}`;
+        y += 12;
+        (group.rows || []).forEach(r => {
+          y += rowH;
+          const val = Number(r.current_net_revenue || 0);
+          const bw = val / max * (w - left - right);
+          root.appendChild(svg('text', {x:left-8, y:y+5, 'text-anchor':'end', 'font-size':'12', fill:'#344054'})).textContent = cleanName(r['门店名称']);
+          root.appendChild(svg('rect', {x:left, y:y-11, width:bw, height:18, rx:4, fill:colors.teal}));
+          root.appendChild(svg('text', {x:left + bw + 8, y:y+3, 'font-size':'12', fill:'#657386'})).textContent = fmtWan(val);
+        });
+        y += groupGap - 10;
       });
       el.innerHTML = '';
       el.appendChild(root);
@@ -789,55 +856,62 @@ HTML_TEMPLATE = r'''<!doctype html>
       el.innerHTML = '';
       el.appendChild(root);
     }
-    function renderScatter() {
+    function renderBucketedScatter() {
       const el = document.getElementById('scatter');
-      const w = 760, h = 330, left = 60, right = 30, top = 30, bottom = 46;
-      const xs = stores.map(r => Number(r.wow_net_revenue_pct || 0));
-      const ys = stores.map(r => Number(r.current_net_revenue || 0));
-      const minX = Math.min(...xs, -0.01), maxX = Math.max(...xs, 0.01), maxY = Math.max(...ys, 1);
-      const revenueThreshold = Number(data.segment_rules.revenue_threshold || 0);
-      const growthThreshold = Number(data.segment_rules.growth_threshold || 0);
-      const xScale = v => left + (v - minX) / (maxX - minX || 1) * (w-left-right);
-      const yScale = v => h - bottom - v / maxY * (h-top-bottom);
+      const groups = segmentGroups.length ? segmentGroups : [{label:'全体门店', rows:stores, revenue_threshold:data.segment_rules.revenue_threshold, growth_threshold:0}];
+      const w = 760, panelH = 260, h = Math.max(330, groups.length * panelH + 18), left = 58, right = 28, topPad = 34, bottom = 40;
       const root = svg('svg', {viewBox:`0 0 ${w} ${h}`});
-      root.appendChild(svg('line', {x1:left, y1:h-bottom, x2:w-right, y2:h-bottom, stroke:'#9aa7b5'}));
-      root.appendChild(svg('line', {x1:left, y1:top, x2:left, y2:h-bottom, stroke:'#9aa7b5'}));
-      root.appendChild(svg('line', {x1:xScale(growthThreshold), y1:top, x2:xScale(growthThreshold), y2:h-bottom, stroke:'#cfd9e3', 'stroke-dasharray':'5 5'}));
-      root.appendChild(svg('line', {x1:left, y1:yScale(revenueThreshold), x2:w-right, y2:yScale(revenueThreshold), stroke:'#cfd9e3', 'stroke-dasharray':'5 5'}));
-      [
-        ['高基盘承压', left + 12, top + 18, colors.amber],
-        ['明星门店', Math.min(w - right - 90, xScale(growthThreshold) + 12), top + 18, colors.green],
-        ['问题门店', left + 12, h - bottom - 14, colors.red],
-        ['成长观察', Math.min(w - right - 90, xScale(growthThreshold) + 12), h - bottom - 14, colors.blue]
-      ].forEach(([label, x, y, color]) => {
-        root.appendChild(svg('text', {x, y, 'font-size':'11', fill:color, 'font-weight':'800', opacity:.78})).textContent = label;
-      });
-      const placedLabels = [];
-      stores.forEach(r => {
-        const seg = r.segment;
-        const fill = seg === '明星门店' ? colors.green : seg === '问题门店' ? colors.red : seg === '高基盘承压' ? colors.amber : colors.blue;
-        const radius = 7 + Math.min(12, Number(r.current_discount_rate || 0) * 35);
-        const cx = xScale(Number(r.wow_net_revenue_pct || 0));
-        const cy = yScale(Number(r.current_net_revenue || 0));
-        root.appendChild(svg('circle', {cx, cy, r:radius, fill, opacity:.82}));
-        let anchor = 'start';
-        let lx = cx + radius + 4;
-        let ly = cy + 4;
-        if (cx > w - right - 90) {
-          anchor = 'end';
-          lx = cx - radius - 4;
-        }
-        let guard = 0;
-        while (placedLabels.some(p => Math.abs(p.x - lx) < 92 && Math.abs(p.y - ly) < 15) && guard < 8) {
-          ly += 15;
-          if (ly > h - bottom - 8) ly = cy - 12 - guard * 10;
-          guard += 1;
-        }
-        placedLabels.push({x: lx, y: ly});
-        root.appendChild(svg('text', {x:lx, y:ly, 'text-anchor':anchor, 'font-size':'11', fill:'#344054', stroke:'#fff', 'stroke-width':3, 'paint-order':'stroke'})).textContent = cleanName(r['门店名称']);
+      groups.forEach((group, groupIndex) => {
+        const rows = group.rows || [];
+        const top = groupIndex * panelH + topPad;
+        const axisBottom = (groupIndex + 1) * panelH - bottom;
+        const xs = rows.map(r => Number(r.wow_net_revenue_pct || 0));
+        const ys = rows.map(r => Number(r.current_net_revenue || 0));
+        const minX = Math.min(...xs, -0.01), maxX = Math.max(...xs, 0.01), maxY = Math.max(...ys, 1);
+        const revenueThreshold = Number(group.revenue_threshold || 0);
+        const growthThreshold = Number(group.growth_threshold || 0);
+        const xScale = v => left + (v - minX) / (maxX - minX || 1) * (w-left-right);
+        const yScale = v => axisBottom - v / maxY * (axisBottom-top);
+        root.appendChild(svg('text', {x:left, y:top-14, 'font-size':'13', fill:'#172033', 'font-weight':'800'})).textContent = `${group.label}四象限`;
+        root.appendChild(svg('text', {x:w-right, y:top-14, 'text-anchor':'end', 'font-size':'11', fill:'#657386'})).textContent = `收入中位数 ${fmtWan(revenueThreshold)}`;
+        root.appendChild(svg('line', {x1:left, y1:axisBottom, x2:w-right, y2:axisBottom, stroke:'#9aa7b5'}));
+        root.appendChild(svg('line', {x1:left, y1:top, x2:left, y2:axisBottom, stroke:'#9aa7b5'}));
+        root.appendChild(svg('line', {x1:xScale(growthThreshold), y1:top, x2:xScale(growthThreshold), y2:axisBottom, stroke:'#cfd9e3', 'stroke-dasharray':'5 5'}));
+        root.appendChild(svg('line', {x1:left, y1:yScale(revenueThreshold), x2:w-right, y2:yScale(revenueThreshold), stroke:'#cfd9e3', 'stroke-dasharray':'5 5'}));
+        [
+          ['高基盘承压', left + 10, top + 17, colors.amber],
+          ['明星门店', Math.min(w - right - 88, xScale(growthThreshold) + 10), top + 17, colors.green],
+          ['问题门店', left + 10, axisBottom - 12, colors.red],
+          ['成长观察', Math.min(w - right - 88, xScale(growthThreshold) + 10), axisBottom - 12, colors.blue]
+        ].forEach(([label, x, y, color]) => {
+          root.appendChild(svg('text', {x, y, 'font-size':'10', fill:color, 'font-weight':'800', opacity:.78})).textContent = label;
+        });
+        const placedLabels = [];
+        rows.forEach(r => {
+          const seg = r.segment;
+          const fill = seg === '明星门店' ? colors.green : seg === '问题门店' ? colors.red : seg === '高基盘承压' ? colors.amber : colors.blue;
+          const radius = 7 + Math.min(12, Number(r.current_discount_rate || 0) * 35);
+          const cx = xScale(Number(r.wow_net_revenue_pct || 0));
+          const cy = yScale(Number(r.current_net_revenue || 0));
+          root.appendChild(svg('circle', {cx, cy, r:radius, fill, opacity:.82}));
+          let anchor = 'start';
+          let lx = cx + radius + 4;
+          let ly = cy + 4;
+          if (cx > w - right - 90) {
+            anchor = 'end';
+            lx = cx - radius - 4;
+          }
+          let guard = 0;
+          while (placedLabels.some(p => Math.abs(p.x - lx) < 92 && Math.abs(p.y - ly) < 15) && guard < 8) {
+            ly += 15;
+            if (ly > axisBottom - 8) ly = cy - 12 - guard * 10;
+            guard += 1;
+          }
+          placedLabels.push({x: lx, y: ly});
+          root.appendChild(svg('text', {x:lx, y:ly, 'text-anchor':anchor, 'font-size':'11', fill:'#344054', stroke:'#fff', 'stroke-width':3, 'paint-order':'stroke'})).textContent = cleanName(r['门店名称']);
+        });
       });
       root.appendChild(svg('text', {x:w/2, y:h-10, 'text-anchor':'middle', 'font-size':'12', fill:'#657386'})).textContent = '环比增长率';
-      root.appendChild(svg('text', {x:16, y:20, 'font-size':'12', fill:'#657386'})).textContent = '业务收入';
       el.innerHTML = '';
       el.appendChild(root);
     }
@@ -1004,11 +1078,16 @@ HTML_TEMPLATE = r'''<!doctype html>
       el.appendChild(root);
     }
     function renderDriverBar() {
-      const problemStores = stores.filter(r => r.segment === '问题门店').slice(0, 6);
-      const rows = problemStores.length ? problemStores : stores.slice(-6);
+      const groups = segmentGroups.map(group => ({
+        label: group.label,
+        rows: (group.rows || []).filter(r => r.segment === '问题门店').slice(0, 4)
+      })).filter(group => group.rows.length);
+      const fallbackRows = stores.filter(r => r.segment === '问题门店').slice(0, 6);
+      const renderGroups = groups.length ? groups : [{label:'问题门店', rows:fallbackRows.length ? fallbackRows : stores.slice(-6)}];
       const el = document.getElementById('driverBar');
-      const w = 1120, h = Math.max(430, rows.length * 76 + 92), left = 180, mid = 575, right = 120;
-      const vals = rows.flatMap(r => [Number(r.wow_order_volume_contribution||0), Number(r.wow_aov_contribution||0), Number(r.wow_dine_in_delta||0), Number(r.wow_delivery_delta||0)]);
+      const totalRows = renderGroups.reduce((sum, group) => sum + group.rows.length, 0);
+      const w = 1120, h = Math.max(430, totalRows * 76 + renderGroups.length * 42 + 70), left = 180, mid = 575, right = 120;
+      const vals = renderGroups.flatMap(group => group.rows.flatMap(r => [Number(r.wow_order_volume_contribution||0), Number(r.wow_aov_contribution||0), Number(r.wow_dine_in_delta||0), Number(r.wow_delivery_delta||0)]));
       const max = Math.max(...vals.map(v=>Math.abs(v)), 1);
       const root = svg('svg', {viewBox:`0 0 ${w} ${h}`});
       [['量贡献', colors.blue, 0], ['价贡献', colors.teal, 72], ['堂食变化', colors.green, 144], ['外卖变化', colors.amber, 232]].forEach(([label, color, xOff]) => {
@@ -1016,18 +1095,24 @@ HTML_TEMPLATE = r'''<!doctype html>
         root.appendChild(svg('text', {x: left + xOff + 18, y: 27, 'font-size':'12', fill:'#657386'})).textContent = label;
       });
       root.appendChild(svg('line', {x1:mid, y1:46, x2:mid, y2:h-26, stroke:'#d9e2ea'}));
-      rows.forEach((r,i) => {
-        const y = 62 + i * 76;
-        if (i > 0) {
-          root.appendChild(svg('line', {x1: left, y1: y - 14, x2: w - right, y2: y - 14, stroke:'#d9e2ea', 'stroke-dasharray':'5 6'}));
-        }
-        root.appendChild(svg('text', {x:left-8, y:y+25, 'text-anchor':'end', 'font-size':'12', fill:'#344054'})).textContent = cleanName(r['门店名称']);
-        [[Number(r.wow_order_volume_contribution||0), colors.blue, 0], [Number(r.wow_aov_contribution||0), colors.teal, 16], [Number(r.wow_dine_in_delta||0), colors.green, 32], [Number(r.wow_delivery_delta||0), colors.amber, 48]].forEach(([v,c,off]) => {
-          const bw = Math.abs(v) / max * 360;
-          const x = v >= 0 ? mid : mid - bw;
-          root.appendChild(svg('rect', {x, y:y+off, width:bw, height:12, rx:2, fill:c, opacity:.9}));
-          root.appendChild(svg('text', {x: v >= 0 ? x + bw + 7 : x - 7, y:y+off+10, 'text-anchor': v >= 0 ? 'start':'end', 'font-size':'11', fill:'#657386'})).textContent = fmtWan(v);
+      let y = 58;
+      renderGroups.forEach(group => {
+        root.appendChild(svg('text', {x:left-8, y:y+16, 'text-anchor':'end', 'font-size':'12', fill:'#172033', 'font-weight':'800'})).textContent = `${group.label}问题`;
+        y += 28;
+        group.rows.forEach((r,i) => {
+          if (i > 0) {
+            root.appendChild(svg('line', {x1: left, y1: y - 14, x2: w - right, y2: y - 14, stroke:'#d9e2ea', 'stroke-dasharray':'5 6'}));
+          }
+          root.appendChild(svg('text', {x:left-8, y:y+25, 'text-anchor':'end', 'font-size':'12', fill:'#344054'})).textContent = cleanName(r['门店名称']);
+          [[Number(r.wow_order_volume_contribution||0), colors.blue, 0], [Number(r.wow_aov_contribution||0), colors.teal, 16], [Number(r.wow_dine_in_delta||0), colors.green, 32], [Number(r.wow_delivery_delta||0), colors.amber, 48]].forEach(([v,c,off]) => {
+            const bw = Math.abs(v) / max * 360;
+            const x = v >= 0 ? mid : mid - bw;
+            root.appendChild(svg('rect', {x, y:y+off, width:bw, height:12, rx:2, fill:c, opacity:.9}));
+            root.appendChild(svg('text', {x: v >= 0 ? x + bw + 7 : x - 7, y:y+off+10, 'text-anchor': v >= 0 ? 'start':'end', 'font-size':'11', fill:'#657386'})).textContent = fmtWan(v);
+          });
+          y += 76;
         });
+        y += 14;
       });
       el.innerHTML = '';
       el.appendChild(root);
@@ -1037,6 +1122,7 @@ HTML_TEMPLATE = r'''<!doctype html>
       const tagClass = segment => segment === '明星门店' ? 'star' : segment === '问题门店' ? 'problem' : segment === '高基盘承压' ? 'pressure' : segment === '成长观察' ? 'growth' : '';
       const rows = stores.map(r => `<tr>
         <td>${cleanName(r['门店名称'])}</td>
+        <td>${r.store_size || '未分组'}</td>
         <td><span class="tag ${tagClass(r.segment)}">${r.segment}</span></td>
         <td>${fmtWan(r.current_net_revenue)}</td>
         <td>${fmtPct(r.wow_net_revenue_pct)}</td>
@@ -1066,9 +1152,16 @@ HTML_TEMPLATE = r'''<!doctype html>
     }
     function renderActions() {
       const groups = {};
-      stores.forEach(r => { groups[r.segment] = groups[r.segment] || []; groups[r.segment].push(cleanName(r['门店名称'])); });
+      stores.forEach(r => {
+        const key = `${r.store_size || '未分组'} · ${r.segment}`;
+        groups[key] = groups[key] || [];
+        groups[key].push(cleanName(r['门店名称']));
+      });
       const hint = k => k === '明星门店' ? '沉淀可复制打法' : k === '问题门店' ? '优先复盘负向因素' : k === '高基盘承压' ? '防止高收入门店继续滑坡' : '验证增长是否可持续';
-      document.getElementById('actionList').innerHTML = Object.entries(groups).map(([k, arr]) => `<div class="card" style="margin-bottom:10px; min-height:0;"><div class="label">${k}</div><div style="margin-top:8px;">${arr.join('、')}</div><div class="foot">${hint(k)}</div></div>`).join('');
+      document.getElementById('actionList').innerHTML = Object.entries(groups).map(([k, arr]) => {
+        const segment = k.split(' · ')[1] || k;
+        return `<div class="card" style="margin-bottom:10px; min-height:0;"><div class="label">${k}</div><div style="margin-top:8px;">${arr.join('、')}</div><div class="foot">${hint(segment)}</div></div>`;
+      }).join('');
     }
     function fmtDeltaWan(v) {
       if (v === null || v === undefined || v === '') return 'N/A';
@@ -1197,9 +1290,9 @@ HTML_TEMPLATE = r'''<!doctype html>
     renderMeta();
     renderKpis();
     renderRules();
-    renderHorizontalBar('revenueBar', stores, 'current_net_revenue', fmtWan, colors.teal);
+    renderBucketedRevenueRanking();
     renderGrowthBar();
-    renderScatter();
+    renderBucketedScatter();
     renderTrendSelector();
     renderTrend();
     renderTable();

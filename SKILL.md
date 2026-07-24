@@ -20,13 +20,22 @@ Use this skill to run the Maijia Xiaoguan operating-data workflow end to end:
 - Separate facts from interpretation: scripts create fact tables; the agent writes management conclusions from those tables.
 - Avoid profit or root-cause certainty unless cost, labor, rent, commission, menu margin, and qualitative evidence are available.
 
+## Store Size Buckets
+
+麦家小馆门店必须按经营容量分为大店和小店。凡是做门店横向比较、门店分型、收入中位数、折扣率中位数、客单价中位数、明星/问题门店识别、问题门店归因 Top 列表、经营动作提示时，都必须在同一个 bucket 内比较；不要把大店和小店混在一个中位数或平均值样本池里。
+
+- 小店：龙玥城店、文化园店、苏州街店、常营店、通州保利店
+- 大店：荣京道店、经海路店、国粹苑店、上海沙龙店
+
+不需要额外拆分大小店的内容：全体 KPI 总览、单店自身同比/环比、最近 16 周趋势、24 小时时段收入、堂食/外卖结构、档口/菜品归因本身。若这些模块引用“明星/问题门店”，则其分型来源必须使用大小店 bucket 内的结果。
+
 ## Resource Map
 
 - `scripts/profile_business_data.py`: stream-read a Meituan `.xlsx` and create fact tables plus `analysis_summary.json`.
 - `scripts/generate_business_report_html.py`: render a self-contained HTML diagnosis report from the fact tables.
 - `scripts/run_pipeline.py`: execute profiling and HTML generation in one command.
 - `scripts/profile_weekly_meeting_data.py`: stream-read weekly meeting business/dish/catalog inputs into comparison and attribution fact tables.
-- `scripts/generate_weekly_meeting_report_html.py`: render the full weekly meeting HTML with trend, quadrant, channel, driver, hourly revenue, and optional stall attribution sections.
+- `scripts/generate_weekly_meeting_report_html.py`: render the full weekly meeting HTML with trend, store-size-bucketed quadrant/ranking, channel, driver, hourly revenue, and optional stall attribution sections.
 - `scripts/run_weekly_meeting_report.py`: execute the weekly meeting profiling and full HTML generation in one command.
 - `scripts/profile_monthly_meeting_data.py`: stream-read monthly meeting business/dish/catalog inputs into month-level comparison, 6-month trend, and attribution fact tables.
 - `scripts/generate_monthly_meeting_report_html.py`: render the full monthly meeting HTML with month-level trend, quadrant, channel, driver, daypart, and optional stall attribution sections.
@@ -246,7 +255,7 @@ Weekly meeting fact tables:
 - `weekly_trend_comparison_metrics.csv`
 - `weekly_store_comparison.csv`
 - `store_driver_summary.csv`
-- `star_problem_stores.csv`
+- `star_problem_stores.csv` with `store_size`; weekly reports classify stores inside the 大店 / 小店 bucket, using bucket-specific revenue, discount-rate, and AOV medians.
 - `weekly_store_stall_metrics.csv` when dish and catalog inputs are available
 - `weekly_store_stall_comparison.csv` when dish and catalog inputs are available
 - `weekly_store_stall_driver_summary.csv` when dish and catalog inputs are available
@@ -278,7 +287,7 @@ Use this default structure:
 1. Executive summary: 3-5 answer-first judgments.
 2. Data and metric basis: scope, period, rows, stores, caveats.
 3. Overall operating baseline: revenue, orders, discount, AOV, membership.
-4. Store portfolio: ranking, segmentation, outliers, replication opportunities.
+4. Store portfolio: ranking, segmentation, outliers, replication opportunities; ranking, segmentation, and quadrant judgments must compare 大店 only with 大店 and 小店 only with 小店.
 5. Channel quality: dine-in, delivery, pickup, platforms, discount intensity.
 6. Hourly revenue opportunities: 24-hour revenue bar chart, with a dropdown for all stores or each single store, and peak/off-peak actions.
 7. Dish/stall drilldown when `自助菜品取数` and `菜品库` are available: explain which `基础分类` stalls drive revenue gain/loss and list the top dishes behind each movement.
