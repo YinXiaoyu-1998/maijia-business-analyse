@@ -40,6 +40,9 @@ Use this skill to run the Maijia Xiaoguan operating-data workflow end to end:
 - `scripts/profile_monthly_meeting_data.py`: stream-read monthly meeting business/dish/catalog inputs into month-level comparison, 6-month trend, and attribution fact tables.
 - `scripts/generate_monthly_meeting_report_html.py`: render the full monthly meeting HTML with month-level trend, quadrant, channel, driver, daypart, and optional stall attribution sections.
 - `scripts/run_monthly_meeting_report.py`: execute the monthly meeting profiling and full HTML generation in one command.
+- `scripts/profile_monthly_profit_data.py`: stream-read a monthly profit workbook plus business exports and derive store-month profit-rate facts.
+- `scripts/generate_monthly_profit_report_html.py`: render a standalone, self-contained monthly profit / profit-rate chart report.
+- `scripts/run_monthly_profit_report.py`: execute the standalone profit report pipeline in one command.
 - `scripts/download_meituan_signed_url.py`: download an export from an already-authorized signed Meituan/Sankuai URL.
 - `references/meituan_export_workflow.zh.md`: read when the user asks to fetch or re-fetch data from Meituan 管家.
 - `references/report_style.zh.md`: read before drafting narrative conclusions or changing report structure.
@@ -206,6 +209,34 @@ python3 maijia-business-analyse/scripts/run_monthly_meeting_report.py \
 
 When `--dish-input` and `--catalog` are omitted, the monthly report remains backward-compatible and omits stall attribution.
 
+## Monthly Profit And Profit-Rate Report Guardrail
+
+When the user asks for a standalone 利润表、净利润趋势、利润率趋势、利润/利润率 HTML, use `scripts/run_monthly_profit_report.py`. This is a separate profit-report workflow and must not be folded into the weekly, monthly-meeting, or business-diagnosis report.
+
+Metric rules:
+
+- Preserve blank profit-workbook cells as `无数据／门店尚未开业`; do not convert them to zero or connect the line across them.
+- Keep the X-axis fixed at January through December for every selected year.
+- Calculate a monthly profit rate only after summing `营业额(元)` across every business-export detail row for the matching store and natural month: `净利润 ÷ 当月营业额汇总`.
+- Never average detail-row rates or precomputed rates.
+- Map user-provided profit-sheet store labels explicitly to business-export store names. For the current 麦家小馆 convention: `保利店 -> 门店名称包含通州保利`.
+- If business data begins partway through a month, leave that month’s profit rate blank unless the user explicitly requests a partial-month rate. For the current data set, keep 2024-06 and earlier blank.
+
+Example:
+
+```bash
+python3 maijia-business-analyse/scripts/run_monthly_profit_report.py \
+  --profit-file documents/tables/maijia_month_profit_202301_202606.xlsx \
+  --business-input documents/raw_exports/maijia_business_20240101_20241031.xlsx \
+                   documents/raw_exports/maijia_business_20241101_20250131.xlsx \
+                   documents/raw_exports/maijia_business_20250201_20250625.xlsx \
+                   documents/raw_exports/maijia_business_20250626_20260625.xlsx \
+                   documents/raw_exports/maijia_business_20260626_20260628.xlsx \
+                   documents/raw_exports/maijia_business_20260629_20260630.xlsx \
+  --output-dir documents/maijia_month_profit_analysis \
+  --report documents/maijia_month_profit_analysis/maijia_month_profit_report.html
+```
+
 Expected fact tables:
 
 - `analysis_summary.json`
@@ -263,6 +294,10 @@ Use this default structure:
 8. Opportunity pool: 30/60/90 day actions with evidence strength.
 
 Use charts and compact UI over long prose. Keep conclusions short and tied to a metric.
+
+### 通用折线图视觉规范
+
+所有由本 skill 生成的折线图都使用同一规则：折线与普通数据点为黄色；每条有效数据序列的最低点为红色、最高点为蓝色；只有一个有效点或最高/最低值完全相同的序列保持普通黄色。若同一图中有当前期和上一期/同期两个序列，当前期使用实线，对比序列使用虚线；两条线仍遵循各自的极值配色。
 
 ## Validation
 

@@ -10,6 +10,7 @@
 - 处理很大的 `.xlsx` 文件，不需要一次性读完整工作簿。
 - 生成门店、渠道、餐段、会员、月度趋势等事实表。
 - 自动生成自包含 HTML 报告，包含 KPI、柱状图、散点图、热力图、排序表和机会池。
+- 支持独立生成三家门店的月利润与利润率 HTML 图表；不混入常规周报、月会或经营诊断报告。
 - 支持复用到 Codex、Claude Code、Cursor 等能读取本地 skill 文件夹的智能体。
 
 ## 安装
@@ -94,6 +95,23 @@ python3 scripts/generate_business_report_html.py \
   --source-name maijia_business_YYYYMMDD_YYYYMMDD.xlsx
 ```
 
+### 4. 独立生成月利润与利润率图表
+
+利润率按自然月重新计算：`净利润 ÷ 当月营业额(元)汇总`。利润表空值保持为空；流水从月中才开始的月份默认不计算利润率。该流程不属于周报、月会或经营诊断报告。
+
+```bash
+python3 scripts/run_monthly_profit_report.py \
+  --profit-file documents/tables/maijia_month_profit_202301_202606.xlsx \
+  --business-input documents/raw_exports/maijia_business_20240101_20241031.xlsx \
+                   documents/raw_exports/maijia_business_20241101_20250131.xlsx \
+                   documents/raw_exports/maijia_business_20250201_20250625.xlsx \
+                   documents/raw_exports/maijia_business_20250626_20260625.xlsx \
+                   documents/raw_exports/maijia_business_20260626_20260628.xlsx \
+                   documents/raw_exports/maijia_business_20260629_20260630.xlsx \
+  --output-dir documents/maijia_month_profit_analysis \
+  --report documents/maijia_month_profit_analysis/maijia_month_profit_report.html
+```
+
 ## 输出文件
 
 - `analysis_summary.json`：总览 KPI、字段样本、Top/Bottom 摘要。
@@ -104,6 +122,9 @@ python3 scripts/generate_business_report_html.py \
 - `member_summary.csv`：会员/非会员汇总。
 - `store_daypart_summary.csv`：门店 × 餐段 × 时段事实表。
 - `maijia_business_diagnosis_report.html`：自包含 HTML 经营诊断报告。
+- `monthly_profit_metrics.csv`：门店 × 年份 × 月份的净利润、营业额汇总与利润率事实表。
+- `monthly_profit_summary.json`：利润表来源、门店映射、利润率口径与原始营业表覆盖摘要。
+- `maijia_month_profit_report.html`：独立的利润 / 利润率交互式趋势图报告。
 
 ## 校验
 
