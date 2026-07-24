@@ -6,7 +6,7 @@ A reusable skill for Maijia Xiaoguan / Meituan POS business analysis. It helps a
 
 - Guides data export from Meituan 管家 `自助营业取数`.
 - Builds daypart attribution from the `营业分组表` field `时段` for weekly and monthly meeting reports.
-- Notes when to fetch `自助菜品取数` for separate dish-level penetration work.
+- Builds a `销售额菜品比例` pie chart from `自助菜品取数` when dish exports are provided.
 - Processes large Excel exports without loading the whole workbook into memory.
 - Builds fact tables for stores, channels, dayparts, members, and monthly trends.
 - Generates a self-contained HTML report with KPI cards, bar charts, scatter plots, heatmaps, sortable tables, and an opportunity pool.
@@ -66,7 +66,7 @@ Save all raw downloaded files under `documents/raw_exports/`:
 
 For split downloads, append `_part01`, `_part02`, etc. before `.xlsx`.
 
-Weekly and monthly meeting reports use the business export's `时段` field for daypart attribution, so they do not require dish or catalog exports. When dish-level penetration, menu attribution, or "穿透到菜品" is separately required, use the same reference file and fetch `自助取数 -> 自助菜品取数`. Select all field groups and download the matching `菜品主题数据(日期【...】)` row from `下载清单记录`, then save it with the standard name such as `documents/raw_exports/maijia_dishes_20260614_20260620.xlsx`.
+Weekly and monthly meeting reports use the business export's `时段` field for daypart attribution. When the report should include the `销售额菜品比例` pie chart, also fetch `自助取数 -> 自助菜品取数`, select all field groups, download the matching `菜品主题数据(日期【...】)` row from `下载清单记录`, and save it with the standard name such as `documents/raw_exports/maijia_dishes_20260614_20260620.xlsx`. The pie chart uses `营业分组表.店内营业收入` as the denominator and `订单分类=店内销售` 的 `菜品收入` as the numerator; no dish catalog is required.
 
 ### 2. Run the Full Pipeline
 

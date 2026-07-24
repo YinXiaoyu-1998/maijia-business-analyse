@@ -178,12 +178,75 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
         self.assertIn("colors.maximum", report.HTML_TEMPLATE)
         self.assertIn("'7 5'", report.HTML_TEMPLATE)
 
+    def test_payload_builds_dish_sales_mix_top_ten_and_other(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            input_dir = Path(tmp)
+            (input_dir / "weekly_meeting_summary.json").write_text(
+                json.dumps(
+                    {
+                        "meta": {
+                            "coverage_start": "2026/07/13",
+                            "coverage_end": "2026/07/19",
+                            "target_windows": {
+                                "current": {"label": "本周", "start": "2026/07/13", "end": "2026/07/19"},
+                                "previous": {"label": "环比周", "start": "2026/07/06", "end": "2026/07/12"},
+                                "yoy": {"label": "同比周", "start": "2025/07/14", "end": "2025/07/20"},
+                            },
+                            "processed_rows": 4,
+                            "store_count": 1,
+                            "outputs": [],
+                            "dish_sales_mix": {"enabled": True, "basis": "测试菜品比例"},
+                        },
+                        "data_gaps": [],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            write_csv(input_dir / "weekly_store_comparison.csv", [{"门店名称": "麦家小馆（甲店）", "current_net_revenue": 1000, "previous_net_revenue": 900, "yoy_net_revenue": 800, "current_positive_orders": 10}])
+            write_csv(input_dir / "star_problem_stores.csv", [{"门店名称": "麦家小馆（甲店）", "segment": "明星门店", "reason": ""}])
+            write_csv(input_dir / "store_driver_summary.csv", [{"门店名称": "麦家小馆（甲店）", "basis": "环比"}])
+            write_csv(input_dir / "weekly_store_channel_metrics.csv", [{"period": "本周", "门店名称": "麦家小馆（甲店）", "channel": "堂食", "net_revenue": 1000}])
+            write_csv(input_dir / "weekly_store_daypart_metrics.csv", [{"period": "本周", "门店名称": "麦家小馆（甲店）", "餐段": "午餐", "时段": "12", "net_revenue": 1000}])
+            write_csv(input_dir / "weekly_store_metrics.csv", [{"week_label": "07/13-07/19", "week_end": "2026/07/19", "门店名称": "麦家小馆（甲店）", "net_revenue": 1000}])
+            dish_rows = [
+                {
+                    "period_key": "current",
+                    "period_label": "本周",
+                    "门店名称": "全体门店",
+                    "菜品名称": f"菜品{index}",
+                    "dish_income": 12 - index,
+                    "dish_sales": 12 - index,
+                    "quantity": index,
+                    "dine_in_revenue": 78,
+                    "share": (12 - index) / 78,
+                }
+                for index in range(12)
+            ]
+            write_csv(input_dir / "weekly_store_dish_sales_mix.csv", dish_rows)
+
+            payload = report.build_payload(input_dir, "麦家小馆")
+
+        mix = payload["dish_sales_mix"]
+        self.assertTrue(mix["enabled"])
+        self.assertEqual(mix["entities"][0]["key"], "__all__")
+        self.assertEqual(len(mix["entities"][0]["rows"]), 11)
+        self.assertEqual(mix["entities"][0]["rows"][0]["name"], "菜品0")
+        self.assertEqual(mix["entities"][0]["rows"][-1]["name"], "其他")
+        self.assertAlmostEqual(mix["entities"][0]["rows"][0]["share"], 12 / 78, places=6)
+        self.assertAlmostEqual(mix["entities"][0]["rows"][-1]["value"], 3)
+
     def test_template_replaces_stall_attribution_with_daypart_attribution(self) -> None:
         self.assertIn("daypartAttribution", report.HTML_TEMPLATE)
         self.assertIn("renderDaypartAttribution", report.HTML_TEMPLATE)
         self.assertIn("主要时段信号", report.HTML_TEMPLATE)
         self.assertNotIn("stallAttribution", report.HTML_TEMPLATE)
         self.assertNotIn("主要档口信号", report.HTML_TEMPLATE)
+
+    def test_template_includes_dish_sales_mix_pie(self) -> None:
+        self.assertIn("dishMixPie", report.HTML_TEMPLATE)
+        self.assertIn("renderDishSalesMix", report.HTML_TEMPLATE)
+        self.assertIn("销售额菜品比例", report.HTML_TEMPLATE)
 
 
 if __name__ == "__main__":

@@ -172,6 +172,72 @@ def build_trend_comparison_entities(rows: list[dict[str, Any]]) -> list[dict[str
     return entities
 
 
+def build_dish_sales_mix_payload(rows: list[dict[str, Any]], meta: dict[str, Any]) -> dict[str, Any]:
+    current_rows = [
+        row for row in rows
+        if row.get("period_key") == "current" or row.get("period_label") in {"本周", "本月"}
+    ]
+    if not current_rows:
+        return {"enabled": False, "meta": meta, "entities": []}
+
+    def entity_key(label: str) -> str:
+        return "__all__" if label == "全体门店" else label
+
+    def build_entity(entity_rows: list[dict[str, Any]], label: str) -> dict[str, Any] | None:
+        positive_rows = [
+            row for row in entity_rows
+            if float(row.get("dish_income") or 0) > 0
+        ]
+        if not positive_rows:
+            return None
+        denominator = max(float(row.get("dine_in_revenue") or 0) for row in entity_rows)
+        total_income = sum(float(row.get("dish_income") or 0) for row in positive_rows)
+        total = denominator if denominator > 0 else total_income
+        if total <= 0:
+            return None
+        sorted_rows = sorted(positive_rows, key=lambda row: float(row.get("dish_income") or 0), reverse=True)
+        top_rows = sorted_rows[:10]
+        top_total = sum(float(row.get("dish_income") or 0) for row in top_rows)
+        values = [
+            {
+                "name": str(row.get("菜品名称") or "未知菜品"),
+                "value": round(float(row.get("dish_income") or 0), 2),
+                "quantity": round(float(row.get("quantity") or 0), 2),
+                "share": round(float(row.get("dish_income") or 0) / total, 6),
+                "is_other": False,
+            }
+            for row in top_rows
+        ]
+        other_value = max(0.0, total - top_total)
+        if other_value > 0.01:
+            values.append({
+                "name": "其他",
+                "value": round(other_value, 2),
+                "quantity": None,
+                "share": round(other_value / total, 6),
+                "is_other": True,
+            })
+        return {
+            "key": entity_key(label),
+            "label": label,
+            "total": round(total, 2),
+            "rows": values,
+        }
+
+    stores = sorted({str(row.get("门店名称") or "") for row in current_rows if row.get("门店名称")})
+    ordered_stores = [store for store in ["全体门店"] if store in stores] + [store for store in stores if store != "全体门店"]
+    entities = []
+    for store in ordered_stores:
+        entity = build_entity([row for row in current_rows if row.get("门店名称") == store], store)
+        if entity:
+            entities.append(entity)
+    return {
+        "enabled": bool(meta.get("enabled", bool(entities))) and bool(entities),
+        "meta": meta,
+        "entities": entities,
+    }
+
+
 def median(values: list[float]) -> float:
     clean = sorted(value for value in values if value is not None)
     if not clean:
@@ -283,6 +349,7 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
     trend_comparison = read_csv(trend_comparison_path) if trend_comparison_path.exists() else []
     daypart_comparison = read_optional_csv(input_dir / "weekly_store_daypart_comparison.csv")
     daypart_drivers = read_optional_csv(input_dir / "weekly_store_daypart_driver_summary.csv")
+    dish_sales_mix = read_optional_csv(input_dir / "weekly_store_dish_sales_mix.csv")
 
     segment_by_store = {row["门店名称"]: row for row in segments}
     driver_by_store = {
@@ -395,6 +462,7 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
         "drivers": [row for row in drivers if row.get("basis") == "环比"],
         "segments": segments,
         "channel_by_store": channel_by_store,
+        "dish_sales_mix": build_dish_sales_mix_payload(dish_sales_mix, summary["meta"].get("dish_sales_mix", {})),
         "dayparts": aggregate_dayparts([row for row in dayparts if row.get("period") in {"本周", "环比周"}]),
         "hourly_revenue_entities": aggregate_hourly_revenue_entities(dayparts),
         "trend": aggregate_trend(weekly, current_window_end),
@@ -562,6 +630,7 @@ HTML_TEMPLATE = r'''<!doctype html>
     .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 5px; }
     .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
     table { border-collapse: collapse; width: 100%; min-width: 1180px; }
+    .compact-table { min-width: 520px; }
     th, td { padding: 10px 11px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
     th { background: #f0f4f7; color: var(--muted); font-size: 12px; position: sticky; top: 0; cursor: pointer; }
     td { font-size: 13px; }
@@ -593,6 +662,7 @@ HTML_TEMPLATE = r'''<!doctype html>
         <a href="#ranking">横向对比</a>
         <a href="#stores">门店明细</a>
         <a href="#channels">堂食外卖</a>
+        <a href="#dish-mix">菜品比例</a>
         <a href="#drivers">归因</a>
         <a href="#daypart-drivers">时段归因</a>
         <a href="#dayparts">时段收入</a>
@@ -698,9 +768,29 @@ HTML_TEMPLATE = r'''<!doctype html>
       </div>
     </section>
 
+    <section class="section" id="dish-mix">
+      <div class="section-head">
+        <div><div class="kicker">05 Dish Sales Mix</div><h2>销售额菜品比例：店内营业收入由哪些菜品构成</h2></div>
+        <p class="note">只看店内销售口径：分母为营业分组表“店内营业收入”，分子为菜品主题数据“菜品收入”。</p>
+      </div>
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title-row"><h3>Top 10 菜品占比</h3><select id="dishMixStoreSelect" class="mini-select" aria-label="选择门店菜品比例"></select></div>
+            <span class="label" id="dishMixTotalLabel">本周店内营业收入</span>
+          </div>
+          <div class="chart" id="dishMixPie"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>菜品占比明细</h3><span class="label">Top 10 + 其他</span></div>
+          <div class="table-wrap"><table class="compact-table" id="dishMixTable"><thead><tr><th>菜品</th><th>店内收入</th><th>占比</th><th>数量</th></tr></thead><tbody></tbody></table></div>
+        </div>
+      </div>
+    </section>
+
     <section class="section" id="drivers">
       <div class="section-head">
-        <div><div class="kicker">05 Drivers</div><h2>问题归因：客流/订单量与客单价谁在拖动收入</h2></div>
+        <div><div class="kicker">06 Drivers</div><h2>问题归因：客流/订单量与客单价谁在拖动收入</h2></div>
         <p class="note">归因为近似拆解，用于周会定位复盘方向，不替代门店现场判断。</p>
       </div>
       <div class="panel">
@@ -717,7 +807,7 @@ HTML_TEMPLATE = r'''<!doctype html>
 
     <section class="section" id="daypart-drivers">
       <div class="section-head">
-        <div><div class="kicker">06 Daypart Attribution</div><h2>时段归因：看门店增长和下滑发生在哪些时段</h2></div>
+        <div><div class="kicker">07 Daypart Attribution</div><h2>时段归因：看门店增长和下滑发生在哪些时段</h2></div>
         <p class="note">按门店、餐段、时段汇总订单营业收入，分别比较环比和同比变化；用于定位复盘方向。</p>
       </div>
       <div id="daypartAttribution"></div>
@@ -725,7 +815,7 @@ HTML_TEMPLATE = r'''<!doctype html>
 
     <section class="section" id="dayparts">
       <div class="section-head">
-        <div><div class="kicker">07 Hourly Revenue</div><h2>时段收入：看全天高峰，也看单店节奏</h2></div>
+        <div><div class="kicker">08 Hourly Revenue</div><h2>时段收入：看全天高峰，也看单店节奏</h2></div>
       </div>
       <div class="panel">
         <div class="panel-head">
@@ -754,6 +844,8 @@ HTML_TEMPLATE = r'''<!doctype html>
     const segmentGroups = data.segment_groups || [];
     let selectedTrendKey = '__all__';
     let selectedHourlyKey = '__all__';
+    let selectedDishMixKey = '__all__';
+    const dishPalette = ['#006d77', '#2f5b9f', '#3a7d44', '#b85c00', '#7557a6', '#d96b3b', '#b23a48', '#c89b18', '#4b5563', '#0f766e', '#9aa7b5'];
     const currentTrendYear = String(data.meta?.target_windows?.current?.end || '').slice(0, 4) || '本年';
     const yoyTrendYear = String(data.meta?.target_windows?.yoy?.end || '').slice(0, 4) || '同期';
 
@@ -1098,6 +1190,112 @@ HTML_TEMPLATE = r'''<!doctype html>
       el.innerHTML = '';
       el.appendChild(root);
     }
+    function currentDishMixEntity() {
+      const entities = data.dish_sales_mix?.entities || [];
+      return entities.find(item => item.key === selectedDishMixKey) || entities[0];
+    }
+    function renderDishMixSelector() {
+      const select = document.getElementById('dishMixStoreSelect');
+      if (!select) return;
+      const entities = data.dish_sales_mix?.entities || [];
+      if (!entities.length) {
+        select.innerHTML = '';
+        return;
+      }
+      select.innerHTML = entities.map(item => `<option value="${item.key}">${cleanName(item.label)}</option>`).join('');
+      if (!entities.some(item => item.key === selectedDishMixKey)) selectedDishMixKey = entities[0].key;
+      select.value = selectedDishMixKey;
+      select.addEventListener('change', () => {
+        selectedDishMixKey = select.value;
+        renderDishSalesMix();
+      });
+    }
+    function describeArc(cx, cy, rOuter, rInner, startAngle, endAngle) {
+      const largeArc = endAngle - startAngle > Math.PI ? 1 : 0;
+      const outerStart = [cx + rOuter * Math.cos(startAngle), cy + rOuter * Math.sin(startAngle)];
+      const outerEnd = [cx + rOuter * Math.cos(endAngle), cy + rOuter * Math.sin(endAngle)];
+      const innerStart = [cx + rInner * Math.cos(endAngle), cy + rInner * Math.sin(endAngle)];
+      const innerEnd = [cx + rInner * Math.cos(startAngle), cy + rInner * Math.sin(startAngle)];
+      return [
+        `M ${outerStart[0]} ${outerStart[1]}`,
+        `A ${rOuter} ${rOuter} 0 ${largeArc} 1 ${outerEnd[0]} ${outerEnd[1]}`,
+        `L ${innerStart[0]} ${innerStart[1]}`,
+        `A ${rInner} ${rInner} 0 ${largeArc} 0 ${innerEnd[0]} ${innerEnd[1]}`,
+        'Z'
+      ].join(' ');
+    }
+    function renderDishSalesMix() {
+      const pie = document.getElementById('dishMixPie');
+      const tableBody = document.querySelector('#dishMixTable tbody');
+      const label = document.getElementById('dishMixTotalLabel');
+      const mix = data.dish_sales_mix || {};
+      if (!mix.enabled) {
+        const reason = mix.meta?.reason || '未提供菜品主题数据，未生成销售额菜品比例。';
+        pie.innerHTML = `<div class="callout">${reason}</div>`;
+        if (tableBody) tableBody.innerHTML = '';
+        if (label) label.textContent = '本周店内营业收入';
+        return;
+      }
+      const entity = currentDishMixEntity();
+      if (!entity) return;
+      const rows = entity.rows || [];
+      if (label) label.textContent = `${cleanName(entity.label)}店内营业收入 ${fmtWan(entity.total)}`;
+
+      const w = 760, h = 340, cx = 218, cy = 170, rOuter = 122, rInner = 68;
+      const root = svg('svg', {viewBox:`0 0 ${w} ${h}`});
+      const tip = document.createElement('div');
+      tip.className = 'chart-tooltip';
+      let start = -Math.PI / 2;
+      rows.forEach((row, index) => {
+        const value = Number(row.value || 0);
+        const angle = (value / Math.max(entity.total, 1)) * Math.PI * 2;
+        const end = start + angle;
+        const fill = dishPalette[index % dishPalette.length];
+        if (angle > 0.0001) {
+          const slice = svg('path', {
+            d: describeArc(cx, cy, rOuter, rInner, start, end),
+            fill,
+            stroke:'#fff',
+            'stroke-width':2,
+            style:'cursor:pointer'
+          });
+          slice.addEventListener('mousemove', event => {
+            const bounds = pie.getBoundingClientRect();
+            tip.innerHTML = `<strong>${row.name}</strong>${fmtWan(value)}<br>占比：${fmtPct(row.share)}`;
+            tip.style.left = `${event.clientX - bounds.left + 12}px`;
+            tip.style.top = `${event.clientY - bounds.top - 16}px`;
+            tip.style.display = 'block';
+          });
+          slice.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+          root.appendChild(slice);
+        }
+        start = end;
+      });
+      root.appendChild(svg('text', {x:cx, y:cy-4, 'text-anchor':'middle', 'font-size':'13', fill:'#657386', 'font-weight':'760'})).textContent = cleanName(entity.label);
+      root.appendChild(svg('text', {x:cx, y:cy+24, 'text-anchor':'middle', 'font-size':'24', fill:'#172033', 'font-weight':'840'})).textContent = fmtWan(entity.total);
+      const legendX = 390;
+      rows.forEach((row, index) => {
+        const y = 42 + index * 25;
+        root.appendChild(svg('rect', {x:legendX, y:y-10, width:11, height:11, rx:2, fill:dishPalette[index % dishPalette.length]}));
+        const name = String(row.name || '').length > 18 ? `${String(row.name).slice(0, 18)}...` : row.name;
+        root.appendChild(svg('text', {x:legendX+18, y:y, 'font-size':'12', fill:'#344054', 'font-weight':'700'})).textContent = name;
+        root.appendChild(svg('text', {x:w-28, y:y, 'text-anchor':'end', 'font-size':'12', fill:'#657386'})).textContent = fmtPct(row.share);
+      });
+      pie.innerHTML = '';
+      pie.appendChild(root);
+      pie.appendChild(tip);
+
+      if (tableBody) {
+        tableBody.innerHTML = rows.map((row, index) => `
+          <tr>
+            <td><span class="swatch" style="background:${dishPalette[index % dishPalette.length]}"></span>${row.name}</td>
+            <td>${fmtWan(row.value)}</td>
+            <td>${fmtPct(row.share)}</td>
+            <td>${row.quantity === null || row.quantity === undefined ? '-' : fmtNum(row.quantity)}</td>
+          </tr>
+        `).join('');
+      }
+    }
     function renderDriverBar() {
       const groups = segmentGroups.map(group => ({
         label: group.label,
@@ -1310,6 +1508,8 @@ HTML_TEMPLATE = r'''<!doctype html>
     renderTable();
     renderMixBars();
     renderPlatformBars();
+    renderDishMixSelector();
+    renderDishSalesMix();
     renderDriverBar();
     renderActions();
     renderDaypartAttribution();

@@ -20,8 +20,10 @@ from profile_weekly_meeting_data import (
     diff,
     driver_pair,
     export_group,
+    build_dine_in_revenue_map,
     inspect_workbook,
     parse_date,
+    profile_dish_sales_mix,
     read_workbook_sheet_rows,
     row_dict,
     safe_float,
@@ -265,6 +267,13 @@ def profile(
             row["reason"] = row["reason"].replace("本周", "本月")
     daypart_comparison_rows = compare_store_dayparts(daypart_rows, target_windows)
     daypart_driver_rows = store_daypart_driver_rows(daypart_comparison_rows)
+    dish_sales_mix_meta = profile_dish_sales_mix(
+        dish_inputs,
+        output_dir,
+        target_windows,
+        build_dine_in_revenue_map(target_rows),
+        output_prefix="monthly",
+    )
 
     write_csv(output_dir / "monthly_store_metrics.csv", monthly_rows, ["month_start", "month_end", "month_label", "门店名称", "城市", "商户号"] + METRIC_FIELDS)
     write_csv(output_dir / "monthly_store_channel_metrics.csv", channel_rows, ["month_start", "month_end", "month_label", "门店名称", "城市", "商户号", "period", "channel"] + METRIC_FIELDS)
@@ -292,8 +301,6 @@ def profile(
     write_csv(output_dir / "monthly_store_comparison.csv", comparison_rows, comparison_fields)
     write_csv(output_dir / "store_driver_summary.csv", driver_rows, list(driver_rows[0].keys()) if driver_rows else [])
     write_csv(output_dir / "star_problem_stores.csv", star_rows, list(star_rows[0].keys()) if star_rows else [])
-
-    ignored_stall_inputs = bool(dish_inputs or catalog_path)
 
     summary = {
         "meta": {
@@ -326,6 +333,7 @@ def profile(
                 "monthly_store_daypart_metrics.csv",
                 "monthly_store_daypart_comparison.csv",
                 "monthly_store_daypart_driver_summary.csv",
+                *dish_sales_mix_meta.get("outputs", []),
                 "monthly_trend_comparison_metrics.csv",
                 "monthly_store_comparison.csv",
                 "store_driver_summary.csv",
@@ -340,6 +348,7 @@ def profile(
                     "monthly_store_daypart_driver_summary.csv",
                 ],
             },
+            "dish_sales_mix": dish_sales_mix_meta,
         },
         "comparison": comparison_rows,
         "drivers": driver_rows,
@@ -352,8 +361,12 @@ def profile(
             "当前营业分组表没有网评分数、评论文本字段，不能做网评分数和词云分析。",
             "时段归因基于营业分组表「时段」字段，可定位收入变化发生在哪些时段；不直接解释菜品或现场运营原因。",
             *(
-                ["已提供菜品或菜品库输入，但新月报逻辑已用时段归因替代档口/菜品归因，未生成档口归因表。"]
-                if ignored_stall_inputs else []
+                [dish_sales_mix_meta.get("reason", "未提供菜品主题数据，未生成销售额菜品比例。")]
+                if not dish_sales_mix_meta.get("enabled") else []
+            ),
+            *(
+                ["已提供菜品库输入，但销售额菜品比例不需要菜品库；菜品库仅用于旧档口归因逻辑，本次已忽略。"]
+                if catalog_path else []
             ),
         ],
     }
