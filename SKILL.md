@@ -286,6 +286,10 @@ Use this default structure:
 
 Use charts and compact UI over long prose. Keep conclusions short and tied to a metric.
 
+### 通用折线图视觉规范
+
+所有由本 skill 生成的折线图都使用同一规则：折线与普通数据点为黄色；每条有效数据序列的最低点为红色、最高点为蓝色；只有一个有效点或最高/最低值完全相同的序列保持普通黄色。若同一图中有当前期和上一期/同期两个序列，当前期使用实线，对比序列使用虚线；两条线仍遵循各自的极值配色。
+
 ## Validation
 
 After generating an `.xlsx` export:

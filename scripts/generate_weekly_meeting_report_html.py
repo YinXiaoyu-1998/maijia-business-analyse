@@ -691,7 +691,7 @@ HTML_TEMPLATE = r'''<!doctype html>
     const fmtYuan = v => `${Number(v || 0).toLocaleString('zh-CN', {maximumFractionDigits: 1})}元`;
     const fmtPct = v => v === null || v === undefined || v === '' ? 'N/A' : `${(Number(v) * 100).toFixed(1)}%`;
     const cleanName = s => String(s || '').replace('麦家小馆（', '').replace('）', '');
-    const colors = { teal:'#006d77', blue:'#2f5b9f', green:'#3a7d44', amber:'#b85c00', red:'#b23a48', violet:'#7557a6', orange:'#d96b3b' };
+    const colors = { teal:'#006d77', blue:'#2f5b9f', green:'#3a7d44', amber:'#b85c00', red:'#b23a48', violet:'#7557a6', orange:'#d96b3b', yellow:'#c89b18', yellowFill:'#f2c94c', maximum:'#2f80ed', maximumStroke:'#1c5fb8', minimum:'#e5484d', minimumStroke:'#b42318' };
     let selectedTrendKey = '__all__';
     let selectedHourlyKey = '__all__';
     const currentTrendYear = String(data.meta?.target_windows?.current?.end || '').slice(0, 4) || '本年';
@@ -901,6 +901,9 @@ HTML_TEMPLATE = r'''<!doctype html>
       function drawTrendLine(field, color, dash, seriesLabel, rangeField) {
         const points = trendPoints(field);
         if (!points.length) return;
+        const values = points.map(([, , , value]) => value);
+        const minValue = Math.min(...values), maxValue = Math.max(...values);
+        const hasDistinctExtremes = points.length > 1 && minValue !== maxValue;
         root.appendChild(svg('polyline', {
           points: points.map(p=>`${p[0]},${p[1]}`).join(' '),
           fill: 'none',
@@ -911,7 +914,15 @@ HTML_TEMPLATE = r'''<!doctype html>
           ...(dash ? {'stroke-dasharray': dash} : {})
         }));
         points.forEach(([x,y,r,value], i) => {
-          const point = svg('circle', {cx:x, cy:y, r:5, fill:'#fff', stroke:color, 'stroke-width':2, style:'cursor:pointer'});
+          const isMin = hasDistinctExtremes && value === minValue;
+          const isMax = hasDistinctExtremes && value === maxValue;
+          const point = svg('circle', {
+            cx:x, cy:y, r:5,
+            fill:isMin ? colors.minimum : isMax ? colors.maximum : colors.yellowFill,
+            stroke:isMin ? colors.minimumStroke : isMax ? colors.maximumStroke : color,
+            'stroke-width':2,
+            style:'cursor:pointer'
+          });
           const weekLabel = String(r.week_label || '');
           const weekRange = String(r[rangeField] || '');
           const title = svg('title', {});
@@ -928,8 +939,8 @@ HTML_TEMPLATE = r'''<!doctype html>
           }
         });
       }
-      drawTrendLine(currentField, colors.teal, '', currentTrendYear, hasComparisonShape ? 'current_week_range' : 'week_label');
-      if (hasComparisonShape) drawTrendLine(priorField, colors.amber, '7 5', `${yoyTrendYear}同期`, 'prior_week_range');
+      drawTrendLine(currentField, colors.yellow, '', currentTrendYear, hasComparisonShape ? 'current_week_range' : 'week_label');
+      if (hasComparisonShape) drawTrendLine(priorField, colors.yellow, '7 5', `${yoyTrendYear}同期`, 'prior_week_range');
 
       rows.forEach((r, i) => {
         const x = left + i / Math.max(1, rows.length - 1) * (w-left-right);
@@ -939,10 +950,10 @@ HTML_TEMPLATE = r'''<!doctype html>
           root.appendChild(svg('text', {x:tx, y:h-42, 'text-anchor':anchor, 'font-size':'10', fill:'#657386', transform:`rotate(-32 ${tx} ${h-42})`})).textContent = String(r.week_label).slice(5);
         }
       });
-      root.appendChild(svg('line', {x1:left+190, y1:15, x2:left+232, y2:15, stroke:colors.teal, 'stroke-width':3, 'stroke-linecap':'round'}));
+      root.appendChild(svg('line', {x1:left+190, y1:15, x2:left+232, y2:15, stroke:colors.yellow, 'stroke-width':3, 'stroke-linecap':'round'}));
       root.appendChild(svg('text', {x:left+240, y:19, 'font-size':'11', fill:'#657386'})).textContent = currentTrendYear;
       if (hasComparisonShape) {
-        root.appendChild(svg('line', {x1:left+292, y1:15, x2:left+334, y2:15, stroke:colors.amber, 'stroke-width':3, 'stroke-dasharray':'7 5', 'stroke-linecap':'round'}));
+        root.appendChild(svg('line', {x1:left+292, y1:15, x2:left+334, y2:15, stroke:colors.yellow, 'stroke-width':3, 'stroke-dasharray':'7 5', 'stroke-linecap':'round'}));
         root.appendChild(svg('text', {x:left+342, y:19, 'font-size':'11', fill:'#657386'})).textContent = `${yoyTrendYear}同期`;
       }
       root.appendChild(svg('text', {x:left, y:18, 'font-size':'12', fill:'#657386', 'font-weight':'700'})).textContent = '业务收入（万元）';

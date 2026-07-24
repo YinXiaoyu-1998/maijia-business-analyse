@@ -840,10 +840,21 @@ HTML_TEMPLATE = r'''<!doctype html>
           svg.appendChild(rect);
         });
       } else {
-        const line = svgEl('polyline', {fill: 'none', stroke: '#b85c00', 'stroke-width': 3, points: points.map(p => `${p[0]},${p[1]}`).join(' ')});
+        const lineValues = points.map(([, , row]) => Number(row.discount_rate || 0));
+        const minLineValue = Math.min(...lineValues), maxLineValue = Math.max(...lineValues);
+        const hasDistinctExtremes = points.length > 1 && minLineValue !== maxLineValue;
+        const line = svgEl('polyline', {fill: 'none', stroke: '#c89b18', 'stroke-width': 3, points: points.map(p => `${p[0]},${p[1]}`).join(' ')});
         svg.appendChild(line);
         points.forEach(([x, y, r]) => {
-          const dot = svgEl('circle', {cx: x, cy: y, r: 5, fill: '#b85c00'});
+          const value = Number(r.discount_rate || 0);
+          const isMin = hasDistinctExtremes && value === minLineValue;
+          const isMax = hasDistinctExtremes && value === maxLineValue;
+          const dot = svgEl('circle', {
+            cx: x, cy: y, r: 5,
+            fill: isMin ? '#e5484d' : isMax ? '#2f80ed' : '#f2c94c',
+            stroke: isMin ? '#b42318' : isMax ? '#1c5fb8' : '#c89b18',
+            'stroke-width': 2,
+          });
           dot.addEventListener('mousemove', e => showTip(e, `${r['月']}<br>折扣率：${fmt.pct(r.discount_rate)}`));
           dot.addEventListener('mouseleave', hideTip);
           svg.appendChild(dot);

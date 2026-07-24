@@ -106,6 +106,12 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
         self.assertNotIn('id="heatmap"', report.HTML_TEMPLATE)
         self.assertNotIn("renderHeatmap()", report.HTML_TEMPLATE)
 
+    def test_trend_template_uses_standard_extrema_palette_and_comparison_dash(self) -> None:
+        self.assertIn("colors.yellow", report.HTML_TEMPLATE)
+        self.assertIn("colors.minimum", report.HTML_TEMPLATE)
+        self.assertIn("colors.maximum", report.HTML_TEMPLATE)
+        self.assertIn("'7 5'", report.HTML_TEMPLATE)
+
 
 if __name__ == "__main__":
     unittest.main()
