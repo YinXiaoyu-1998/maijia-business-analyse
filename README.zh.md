@@ -97,7 +97,7 @@ python3 scripts/generate_business_report_html.py \
 
 ### 4. 独立生成月利润与利润率图表
 
-利润率按自然月重新计算：`净利润 ÷ 当月营业额(元)汇总`。利润表空值保持为空；流水从月中才开始的月份默认不计算利润率。该流程不属于周报、月会或经营诊断报告。
+利润率按自然月重新计算：`净利润 ÷ 当月店内营业收入汇总`。利润表空值保持为空；流水从月中才开始的月份默认不计算利润率。该流程不属于周报、月会或经营诊断报告。
 
 ```bash
 python3 scripts/run_monthly_profit_report.py \
@@ -122,7 +122,7 @@ python3 scripts/run_monthly_profit_report.py \
 - `member_summary.csv`：会员/非会员汇总。
 - `store_daypart_summary.csv`：门店 × 餐段 × 时段事实表。
 - `maijia_business_diagnosis_report.html`：自包含 HTML 经营诊断报告。
-- `monthly_profit_metrics.csv`：门店 × 年份 × 月份的净利润、营业额汇总与利润率事实表。
+- `monthly_profit_metrics.csv`：门店 × 年份 × 月份的净利润、店内营业收入汇总与利润率事实表。
 - `monthly_profit_summary.json`：利润表来源、门店映射、利润率口径与原始营业表覆盖摘要。
 - `maijia_month_profit_report.html`：独立的利润 / 利润率交互式趋势图报告。
 

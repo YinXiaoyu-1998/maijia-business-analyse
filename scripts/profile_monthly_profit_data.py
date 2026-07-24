@@ -28,6 +28,7 @@ PROFIT_STORES = {
     "保利店": ("通州保利",),
 }
 RATE_AVAILABLE_FROM = (2024, 7)  # 2024-06 only has partial business data.
+BUSINESS_REVENUE_COLUMN = "店内营业收入"
 
 
 def is_tag(elem: Any, name: str) -> bool:
@@ -154,7 +155,7 @@ def is_summary_row(values: dict[int, str], columns: dict[str, int]) -> bool:
 def aggregate_business_files(paths: Iterable[Path]) -> tuple[dict[tuple[str, int, int], float], list[dict[str, Any]]]:
     revenue: dict[tuple[str, int, int], float] = defaultdict(float)
     source_summary: list[dict[str, Any]] = []
-    required = {"营业日期", "门店名称", "营业额(元)"}
+    required = {"营业日期", "门店名称", BUSINESS_REVENUE_COLUMN}
     summary_dimensions = {"月", "城市", "订单分类", "订单来源"}
 
     for path in paths:
@@ -187,7 +188,7 @@ def aggregate_business_files(paths: Iterable[Path]) -> tuple[dict[tuple[str, int
                                 period = normalize_month(values.get(headers["营业日期"], ""))
                                 if store and period:
                                     year, month = period
-                                    revenue[(store, year, month)] += safe_float(values.get(headers["营业额(元)"]))
+                                    revenue[(store, year, month)] += safe_float(values.get(headers[BUSINESS_REVENUE_COLUMN]))
                                     target_rows += 1
                                     source_months.add(month_label(year, month))
                         elem.clear()
@@ -206,7 +207,7 @@ def rate_available(year: int, month: int) -> bool:
 
 
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
-    fields = ["门店", "年份", "月份", "净利润", "营业额", "利润率", "利润状态", "利润率状态"]
+    fields = ["门店", "年份", "月份", "净利润", BUSINESS_REVENUE_COLUMN, "利润率", "利润状态", "利润率状态"]
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8-sig") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
@@ -242,7 +243,7 @@ def profile(profit_file: Path, business_files: list[Path], output_dir: Path) -> 
             "年份": year,
             "月份": month,
             "净利润": round(profit, 2) if profit is not None else None,
-            "营业额": round(gross_sales, 2) if gross_sales is not None else None,
+            BUSINESS_REVENUE_COLUMN: round(gross_sales, 2) if gross_sales is not None else None,
             "利润率": round(rate, 8) if rate is not None else None,
             "利润状态": profit_status,
             "利润率状态": rate_status,
@@ -260,7 +261,7 @@ def profile(profit_file: Path, business_files: list[Path], output_dir: Path) -> 
             "常营店": "门店名称包含“常营”",
             "保利店": "门店名称包含“通州保利”",
         },
-        "profit_rate_rule": "月净利润 ÷ 当月营业额汇总；2024年6月及更早留空。",
+        "profit_rate_rule": "月净利润 ÷ 当月店内营业收入汇总；2024年6月及更早留空。",
         "business_source_summary": sources,
         "metrics_count": len(rows),
         "outputs": ["monthly_profit_metrics.csv", "monthly_profit_summary.json"],

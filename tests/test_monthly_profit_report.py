@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from zipfile import ZIP_DEFLATED, ZipFile
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +31,19 @@ class MonthlyProfitReportTest(unittest.TestCase):
         self.assertEqual(profile.resolve_profit_store("麦家小馆（通州保利店）"), "保利店")
         self.assertEqual(profile.resolve_profit_store("麦家小馆（常营店）"), "常营店")
 
+    def test_profit_rate_uses_store_income_not_gross_sales(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            workbook = Path(temp) / "business.xlsx"
+            sheet = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>
+<row r="3"><c r="A3" t="inlineStr"><is><t>营业日期</t></is></c><c r="B3" t="inlineStr"><is><t>门店名称</t></is></c><c r="C3" t="inlineStr"><is><t>月</t></is></c><c r="D3" t="inlineStr"><is><t>城市</t></is></c><c r="E3" t="inlineStr"><is><t>订单分类</t></is></c><c r="F3" t="inlineStr"><is><t>订单来源</t></is></c><c r="G3" t="inlineStr"><is><t>店内营业收入</t></is></c><c r="H3" t="inlineStr"><is><t>营业额(元)</t></is></c></row>
+<row r="4"><c r="A4" t="inlineStr"><is><t>2024/07/01</t></is></c><c r="B4" t="inlineStr"><is><t>麦家小馆（苏州街店）</t></is></c><c r="C4" t="inlineStr"><is><t>2024/07</t></is></c><c r="D4" t="inlineStr"><is><t>北京市</t></is></c><c r="E4" t="inlineStr"><is><t>到店</t></is></c><c r="F4" t="inlineStr"><is><t>自营</t></is></c><c r="G4"><v>100</v></c><c r="H4"><v>999</v></c></row>
+</sheetData></worksheet>'''
+            with ZipFile(workbook, "w", ZIP_DEFLATED) as archive:
+                archive.writestr("xl/worksheets/sheet1.xml", sheet)
+            revenue, _ = profile.aggregate_business_files([workbook])
+        self.assertEqual(revenue[("苏州街", 2024, 7)], 100.0)
+
     def test_payload_keeps_all_twelve_months_for_absent_store_year(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             directory = Path(temp)
@@ -41,9 +55,9 @@ class MonthlyProfitReportTest(unittest.TestCase):
                 "profit_rate_rule": "test rule",
             }, ensure_ascii=False), encoding="utf-8")
             with (directory / "monthly_profit_metrics.csv").open("w", encoding="utf-8-sig", newline="") as handle:
-                writer = csv.DictWriter(handle, fieldnames=["门店", "年份", "月份", "净利润", "营业额", "利润率", "利润状态", "利润率状态"])
+                writer = csv.DictWriter(handle, fieldnames=["门店", "年份", "月份", "净利润", "店内营业收入", "利润率", "利润状态", "利润率状态"])
                 writer.writeheader()
-                writer.writerow({"门店": "苏州街", "年份": 2023, "月份": 2, "净利润": 100, "营业额": "", "利润率": "", "利润状态": "已记录", "利润率状态": "无可用流水"})
+                writer.writerow({"门店": "苏州街", "年份": 2023, "月份": 2, "净利润": 100, "店内营业收入": "", "利润率": "", "利润状态": "已记录", "利润率状态": "无可用流水"})
             payload = report.build_payload(directory, "麦家小馆")
         months = payload["data"]["保利店"]["2023"]["profit"]
         self.assertEqual([item["month"] for item in months], list(range(1, 13)))
