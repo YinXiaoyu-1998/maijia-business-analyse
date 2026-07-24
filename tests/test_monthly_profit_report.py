@@ -48,7 +48,8 @@ class MonthlyProfitReportTest(unittest.TestCase):
         months = payload["data"]["保利店"]["2023"]["profit"]
         self.assertEqual([item["month"] for item in months], list(range(1, 13)))
         self.assertTrue(all(item["value"] is None for item in months))
-        self.assertIn("month-hit", report.HTML_TEMPLATE)
+        self.assertIn(".dot[data-month]", report.HTML_TEMPLATE)
+        self.assertNotIn("month-hit", report.HTML_TEMPLATE)
         self.assertIn("select", report.HTML_TEMPLATE)
 
 
