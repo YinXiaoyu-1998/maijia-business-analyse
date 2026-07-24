@@ -194,6 +194,8 @@ python3 maijia-business-analyse/scripts/run_weekly_meeting_report.py \
 
 The weekly report always attempts daypart attribution from the business inputs. `--dish-input` enables the `销售额菜品比例` pie chart; `--catalog` is not needed and is ignored by the standard report logic.
 
+The weekly profiler writes lightweight `[progress]` logs to stderr while it inspects inputs, scans each `.xlsx`, crosses row-count checkpoints, computes attribution, writes CSVs, and writes the final summary. These logs are intentionally separate from the final JSON printed to stdout.
+
 For the monthly meeting report with daypart attribution, run:
 
 ```bash
@@ -214,6 +216,8 @@ python3 maijia-business-analyse/scripts/run_monthly_meeting_report.py \
 ```
 
 The monthly report always attempts daypart attribution from the business inputs. `--dish-input` enables the `销售额菜品比例` pie chart; `--catalog` is not needed and is ignored by the standard report logic.
+
+The monthly profiler uses the same stderr `[progress]` logs as the weekly profiler, so long-running natural-month reports show visible progress before the final JSON appears.
 
 ## Monthly Profit And Profit-Rate Report Guardrail
 
