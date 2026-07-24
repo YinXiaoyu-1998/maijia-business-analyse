@@ -195,6 +195,22 @@ DISH_DRIVER_DETAIL_FIELDS = [
     "quantity_delta",
 ]
 
+DAYPART_DRIVER_SUMMARY_FIELDS = [
+    "门店名称",
+    "basis",
+    "top_negative_daypart",
+    "top_negative_time_slot",
+    "top_negative_net_revenue_delta",
+    "top_negative_net_revenue_pct",
+    "negative_daypart_signal",
+    "top_positive_daypart",
+    "top_positive_time_slot",
+    "top_positive_net_revenue_delta",
+    "top_positive_net_revenue_pct",
+    "positive_daypart_signal",
+    "daypart_signal",
+]
+
 STORE_SIZE_BUCKETS = {
     "小店": {"龙玥城店", "文化园店", "苏州街店", "常营店", "通州保利店"},
     "大店": {"荣京道店", "经海路店", "国粹苑店", "上海沙龙店"},
@@ -1027,6 +1043,96 @@ def dish_driver_rows(
     return rows
 
 
+def compare_store_dayparts(
+    daypart_rows: list[dict[str, Any]],
+    target_windows: dict[str, tuple[str, date, date]],
+) -> list[dict[str, Any]]:
+    period_key_by_label = {label: key for key, (label, _, _) in target_windows.items()}
+    target_rows = [
+        {**row, "period_key": period_key_by_label.get(str(row.get("period") or ""))}
+        for row in daypart_rows
+        if str(row.get("period") or "") in period_key_by_label
+    ]
+    by_key = {
+        (row["门店名称"], row["餐段"], row["时段"], row["period_key"]): row
+        for row in target_rows
+    }
+    keys = sorted({(row["门店名称"], row["餐段"], row["时段"]) for row in target_rows})
+    comparison_rows: list[dict[str, Any]] = []
+    for store, daypart, time_slot in keys:
+        current = by_key.get((store, daypart, time_slot, "current"))
+        previous = by_key.get((store, daypart, time_slot, "previous"))
+        yoy = by_key.get((store, daypart, time_slot, "yoy"))
+        row: dict[str, Any] = {"门店名称": store, "餐段": daypart, "时段": time_slot}
+        for label, source in [("current", current), ("previous", previous), ("yoy", yoy)]:
+            for field in METRIC_FIELDS:
+                row[f"{label}_{field}"] = source.get(field) if source else None
+        for prefix, baseline in [("wow", previous), ("yoy", yoy)]:
+            for field in [
+                "net_revenue",
+                "gross_sales",
+                "positive_orders",
+                "customer_count",
+                "dine_in_revenue",
+                "delivery_revenue",
+                "discount_amount",
+            ]:
+                delta, pct = diff(current, baseline, field)
+                row[f"{prefix}_{field}_delta"] = delta
+                row[f"{prefix}_{field}_pct"] = pct
+        comparison_rows.append(row)
+    comparison_rows.sort(key=lambda row: (row["门店名称"], -(row.get("current_net_revenue") or 0)))
+    return comparison_rows
+
+
+def store_daypart_driver_rows(
+    comparison_rows: list[dict[str, Any]],
+    top_n: int = 3,
+) -> list[dict[str, Any]]:
+    def slot_label(row: dict[str, Any], prefix: str) -> str:
+        delta = float(row.get(f"{prefix}_net_revenue_delta") or 0)
+        sign = "+" if delta > 0 else ""
+        return f"{row.get('餐段') or '未知餐段'} {row.get('时段') or '未知时段'} {sign}{delta:,.0f}"
+
+    rows: list[dict[str, Any]] = []
+    stores = sorted({str(row.get("门店名称") or "") for row in comparison_rows if row.get("门店名称")})
+    for store in stores:
+        store_rows = [row for row in comparison_rows if row.get("门店名称") == store]
+        for basis, prefix in [("环比", "wow"), ("同比", "yoy")]:
+            comparable = [row for row in store_rows if row.get(f"{prefix}_net_revenue_delta") not in {None, ""}]
+            negative = [
+                row
+                for row in sorted(comparable, key=lambda item: float(item.get(f"{prefix}_net_revenue_delta") or 0))
+                if float(row.get(f"{prefix}_net_revenue_delta") or 0) < 0
+            ][:top_n]
+            positive = [
+                row
+                for row in sorted(comparable, key=lambda item: float(item.get(f"{prefix}_net_revenue_delta") or 0), reverse=True)
+                if float(row.get(f"{prefix}_net_revenue_delta") or 0) > 0
+            ][:top_n]
+            top_neg = negative[0] if negative else None
+            top_pos = positive[0] if positive else None
+            negative_signal = " / ".join(slot_label(row, prefix) for row in negative)
+            positive_signal = " / ".join(slot_label(row, prefix) for row in positive)
+            signal_parts = [part for part in [negative_signal, positive_signal] if part]
+            rows.append({
+                "门店名称": store,
+                "basis": basis,
+                "top_negative_daypart": top_neg.get("餐段") if top_neg else "",
+                "top_negative_time_slot": top_neg.get("时段") if top_neg else "",
+                "top_negative_net_revenue_delta": top_neg.get(f"{prefix}_net_revenue_delta") if top_neg else None,
+                "top_negative_net_revenue_pct": top_neg.get(f"{prefix}_net_revenue_pct") if top_neg else None,
+                "negative_daypart_signal": negative_signal,
+                "top_positive_daypart": top_pos.get("餐段") if top_pos else "",
+                "top_positive_time_slot": top_pos.get("时段") if top_pos else "",
+                "top_positive_net_revenue_delta": top_pos.get(f"{prefix}_net_revenue_delta") if top_pos else None,
+                "top_positive_net_revenue_pct": top_pos.get(f"{prefix}_net_revenue_pct") if top_pos else None,
+                "positive_daypart_signal": positive_signal,
+                "daypart_signal": " / ".join(signal_parts) if signal_parts else "无明显时段变化",
+            })
+    return rows
+
+
 def profile_dish_inputs(
     dish_inputs: list[Path],
     catalog_path: Path,
@@ -1356,10 +1462,20 @@ def profile(
         driver_rows.append(driver_pair(store, "同比", current, yoy))
 
     star_rows = classify_stores(comparison_rows)
+    daypart_comparison_rows = compare_store_dayparts(daypart_rows, target_windows)
+    daypart_driver_rows = store_daypart_driver_rows(daypart_comparison_rows)
 
     write_csv(output_dir / "weekly_store_metrics.csv", weekly_rows, ["week_start", "week_end", "week_label", "门店名称", "城市", "商户号"] + METRIC_FIELDS)
     write_csv(output_dir / "weekly_store_channel_metrics.csv", channel_rows, ["week_start", "week_end", "week_label", "门店名称", "城市", "商户号", "period", "channel"] + METRIC_FIELDS)
     write_csv(output_dir / "weekly_store_daypart_metrics.csv", daypart_rows, ["week_start", "week_end", "week_label", "门店名称", "城市", "商户号", "period", "餐段", "时段"] + METRIC_FIELDS)
+    daypart_comparison_fields = ["门店名称", "餐段", "时段"]
+    for prefix in ["current", "previous", "yoy"]:
+        daypart_comparison_fields.extend([f"{prefix}_{field}" for field in METRIC_FIELDS])
+    for prefix in ["wow", "yoy"]:
+        for field in ["net_revenue", "gross_sales", "positive_orders", "customer_count", "dine_in_revenue", "delivery_revenue", "discount_amount"]:
+            daypart_comparison_fields.extend([f"{prefix}_{field}_delta", f"{prefix}_{field}_pct"])
+    write_csv(output_dir / "weekly_store_daypart_comparison.csv", daypart_comparison_rows, daypart_comparison_fields)
+    write_csv(output_dir / "weekly_store_daypart_driver_summary.csv", daypart_driver_rows, DAYPART_DRIVER_SUMMARY_FIELDS)
     write_csv(
         output_dir / "weekly_trend_comparison_metrics.csv",
         trend_comparison_rows,
@@ -1376,26 +1492,7 @@ def profile(
     write_csv(output_dir / "store_driver_summary.csv", driver_rows, list(driver_rows[0].keys()) if driver_rows else [])
     write_csv(output_dir / "star_problem_stores.csv", star_rows, list(star_rows[0].keys()) if star_rows else [])
 
-    stall_attribution: dict[str, Any] = {"enabled": False}
-    stall_gap = "当前未提供自助菜品取数和菜品库基础信息，不能做档口穿透归因。"
-    if dish_inputs and catalog_path:
-        stall_attribution = profile_dish_inputs(dish_inputs, catalog_path, output_dir, target_windows)
-        period_coverage = stall_attribution.get("period_coverage", {})
-        missing_periods = [
-            period_coverage.get(key, {}).get("label", key)
-            for key in ["current", "previous", "yoy"]
-            if not period_coverage.get(key, {}).get("rows")
-        ]
-        missing_note = (
-            f"；菜品主题数据缺少{'、'.join(missing_periods)}，对应档口/菜品同比环比变化会显示为 N/A"
-            if missing_periods else ""
-        )
-        stall_gap = (
-            f"档口按菜品库「总部菜品.基础分类」归因；菜品库匹配率 {stall_attribution.get('match_rate', 0):.1%}，"
-            f"未匹配和重名菜品单独归类；总部套餐暂未拆解到套餐组成菜品{missing_note}。"
-        )
-    elif dish_inputs or catalog_path:
-        stall_gap = "档口穿透需要同时提供自助菜品取数和菜品库基础信息；当前只提供了一类输入，未启用档口归因。"
+    ignored_stall_inputs = bool(dish_inputs or catalog_path)
 
     summary = {
         "meta": {
@@ -1424,14 +1521,22 @@ def profile(
                 "weekly_store_metrics.csv",
                 "weekly_store_channel_metrics.csv",
                 "weekly_store_daypart_metrics.csv",
+                "weekly_store_daypart_comparison.csv",
+                "weekly_store_daypart_driver_summary.csv",
                 "weekly_trend_comparison_metrics.csv",
                 "weekly_store_comparison.csv",
                 "store_driver_summary.csv",
                 "star_problem_stores.csv",
-                *stall_attribution.get("outputs", []),
                 "weekly_meeting_summary.json",
             ],
-            "stall_attribution": stall_attribution,
+            "daypart_attribution": {
+                "enabled": True,
+                "basis": "营业分组表「时段」字段；按门店、餐段、时段汇总订单营业收入后比较本周、环比周、同比周。",
+                "outputs": [
+                    "weekly_store_daypart_comparison.csv",
+                    "weekly_store_daypart_driver_summary.csv",
+                ],
+            },
         },
         "comparison": comparison_rows,
         "drivers": driver_rows,
@@ -1442,7 +1547,11 @@ def profile(
         "weekly_trend_comparison": trend_comparison_rows,
         "data_gaps": [
             "当前营业分组表没有网评分数、评论文本字段，不能做网评分数和词云分析。",
-            stall_gap,
+            "时段归因基于营业分组表「时段」字段，可定位收入变化发生在哪些时段；不直接解释菜品或现场运营原因。",
+            *(
+                ["已提供菜品或菜品库输入，但新周报逻辑已用时段归因替代档口/菜品归因，未生成档口归因表。"]
+                if ignored_stall_inputs else []
+            ),
         ],
     }
     (output_dir / "weekly_meeting_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
