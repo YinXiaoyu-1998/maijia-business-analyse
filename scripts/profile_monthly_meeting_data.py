@@ -24,15 +24,18 @@ from profile_weekly_meeting_data import (
     inspect_workbook,
     parse_date,
     profile_dish_sales_mix,
+    progress,
     read_workbook_sheet_rows,
     row_dict,
     safe_float,
+    short_path,
     store_daypart_driver_rows,
     store_key,
     target_period_for,
     write_csv,
     new_agg,
     DAYPART_DRIVER_SUMMARY_FIELDS,
+    PROGRESS_ROW_INTERVAL,
 )
 
 
@@ -100,7 +103,17 @@ def profile(
     catalog_path: Path | None = None,
     trend_months: int = 6,
 ) -> dict[str, Any]:
-    inspections = [inspect_workbook(path) for path in inputs]
+    progress(f"开始月报 profiling: business_inputs={len(inputs)}, dish_inputs={len(dish_inputs or [])}, trend_months={trend_months}")
+    inspections = []
+    for index, path in enumerate(inputs, start=1):
+        progress(f"检查业务输入 {index}/{len(inputs)}: {short_path(path)}")
+        info = inspect_workbook(path)
+        inspections.append(info)
+        progress(
+            f"业务输入 {index}/{len(inputs)} 覆盖: "
+            f"{date_text(info['min_date']) if info['min_date'] else '未知'}-"
+            f"{date_text(info['max_date']) if info['max_date'] else '未知'}"
+        )
     trend_windows = build_month_trend_windows(target_windows, trend_months)
     later_dates: list[set[date]] = []
     union_later: set[date] = set()
@@ -120,10 +133,14 @@ def profile(
     processed_rows = 0
 
     for index, path in enumerate(inputs):
+        progress(f"扫描业务输入 {index + 1}/{len(inputs)}: {short_path(path)}")
         excluded_dates = later_dates[index]
         headers: list[str] = []
         current_sheet = ""
         sheet_title = ""
+        file_processed_rows = 0
+        file_min_date: date | None = None
+        file_max_date: date | None = None
         for sheet, row_number, values in read_workbook_sheet_rows(path):
             if sheet["path"] != current_sheet:
                 current_sheet = sheet["path"]
@@ -160,6 +177,9 @@ def profile(
             trend_window = trend_window_for(parsed_date, trend_windows)
             processed_dates.add(parsed_date)
             processed_rows += 1
+            file_processed_rows += 1
+            file_min_date = parsed_date if file_min_date is None else min(file_min_date, parsed_date)
+            file_max_date = parsed_date if file_max_date is None else max(file_max_date, parsed_date)
 
             monthly_key = (date_text(start), date_text(end), month_label(start)) + key_store
             add_to_agg(monthly_store[monthly_key], row, parsed_date)
@@ -212,8 +232,19 @@ def profile(
                     month_label(trend_start),
                 ) + key_store
                 add_to_agg(trend_comparison_store[trend_key], row, parsed_date)
+            if file_processed_rows % PROGRESS_ROW_INTERVAL == 0:
+                progress(
+                    f"业务输入 {index + 1}/{len(inputs)} 已纳入 {file_processed_rows:,} 行，"
+                    f"累计 {processed_rows:,} 行。"
+                )
+        progress(
+            f"完成业务输入 {index + 1}/{len(inputs)}: 纳入 {file_processed_rows:,} 行，"
+            f"日期 {date_text(file_min_date) if file_min_date else '无'}-"
+            f"{date_text(file_max_date) if file_max_date else '无'}。"
+        )
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    progress("导出月级、渠道、时段基础事实表。")
     monthly_rows = export_group(monthly_store, ["month_start", "month_end", "month_label", "门店名称", "城市", "商户号"])
     channel_rows = export_group(monthly_store_channel, ["month_start", "month_end", "month_label", "门店名称", "城市", "商户号", "period", "channel"])
     daypart_rows = export_group(monthly_store_daypart, ["month_start", "month_end", "month_label", "门店名称", "城市", "商户号", "period", "餐段", "时段"])
@@ -228,6 +259,7 @@ def profile(
         for row in target_rows
     }
     stores = sorted({row["门店名称"] for row in target_rows})
+    progress(f"计算门店对比和经营归因: stores={len(stores)}")
     comparison_rows: list[dict[str, Any]] = []
     driver_rows: list[dict[str, Any]] = []
     for store in stores:
@@ -265,6 +297,7 @@ def profile(
     for row in star_rows:
         if isinstance(row.get("reason"), str):
             row["reason"] = row["reason"].replace("本周", "本月")
+    progress("计算时段归因。")
     daypart_comparison_rows = compare_store_dayparts(daypart_rows, target_windows)
     daypart_driver_rows = store_daypart_driver_rows(daypart_comparison_rows)
     dish_sales_mix_meta = profile_dish_sales_mix(
@@ -275,6 +308,7 @@ def profile(
         output_prefix="monthly",
     )
 
+    progress("写出月报事实表 CSV。")
     write_csv(output_dir / "monthly_store_metrics.csv", monthly_rows, ["month_start", "month_end", "month_label", "门店名称", "城市", "商户号"] + METRIC_FIELDS)
     write_csv(output_dir / "monthly_store_channel_metrics.csv", channel_rows, ["month_start", "month_end", "month_label", "门店名称", "城市", "商户号", "period", "channel"] + METRIC_FIELDS)
     write_csv(output_dir / "monthly_store_daypart_metrics.csv", daypart_rows, ["month_start", "month_end", "month_label", "门店名称", "城市", "商户号", "period", "餐段", "时段"] + METRIC_FIELDS)
@@ -302,6 +336,7 @@ def profile(
     write_csv(output_dir / "store_driver_summary.csv", driver_rows, list(driver_rows[0].keys()) if driver_rows else [])
     write_csv(output_dir / "star_problem_stores.csv", star_rows, list(star_rows[0].keys()) if star_rows else [])
 
+    progress("写出月报 summary JSON。")
     summary = {
         "meta": {
             "report_grain": "month",
@@ -371,6 +406,11 @@ def profile(
         ],
     }
     (output_dir / "monthly_meeting_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    progress(
+        f"月报 profiling 完成: rows={processed_rows:,}, stores={len(stores)}, "
+        f"coverage={date_text(min(processed_dates)) if processed_dates else '无'}-"
+        f"{date_text(max(processed_dates)) if processed_dates else '无'}"
+    )
     return summary
 
 

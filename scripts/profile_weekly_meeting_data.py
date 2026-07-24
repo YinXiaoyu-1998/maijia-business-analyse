@@ -8,6 +8,7 @@ import csv
 import json
 import math
 import re
+import sys
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -28,6 +29,8 @@ DEFAULT_TARGET_WINDOWS = {
     "previous": ("环比周", date(2026, 6, 7), date(2026, 6, 13)),
     "yoy": ("同比周", date(2025, 6, 15), date(2025, 6, 21)),
 }
+
+PROGRESS_ROW_INTERVAL = 50000
 
 REQUIRED_COLUMNS = [
     "营业日期",
@@ -241,6 +244,14 @@ def store_short_name(name: Any) -> str:
         .replace(")", "")
         .strip()
     )
+
+
+def progress(message: str) -> None:
+    print(f"[progress] {message}", file=sys.stderr, flush=True)
+
+
+def short_path(path: Path) -> str:
+    return path.name or str(path)
 
 
 def store_size_bucket(name: Any) -> str:
@@ -1330,13 +1341,23 @@ def profile_dish_sales_mix(
 ) -> dict[str, Any]:
     output_name = f"{output_prefix}_store_dish_sales_mix.csv"
     if not dish_inputs:
+        progress("未提供菜品主题数据，跳过销售额菜品比例。")
         return {
             "enabled": False,
             "reason": "未提供菜品主题数据，未生成销售额菜品比例。",
             "outputs": [],
         }
 
-    inspections = [inspect_dish_workbook(path) for path in dish_inputs]
+    inspections = []
+    for index, path in enumerate(dish_inputs, start=1):
+        progress(f"检查菜品输入 {index}/{len(dish_inputs)}: {short_path(path)}")
+        info = inspect_dish_workbook(path)
+        inspections.append(info)
+        progress(
+            f"菜品输入 {index}/{len(dish_inputs)} 覆盖: "
+            f"{date_text(info['min_date']) if info['min_date'] else '未知'}-"
+            f"{date_text(info['max_date']) if info['max_date'] else '未知'}"
+        )
     later_dates: list[set[date]] = []
     union_later: set[date] = set()
     for info in reversed(inspections):
@@ -1359,11 +1380,15 @@ def profile_dish_sales_mix(
     for index, path in enumerate(dish_inputs):
         if inspections[index]["dates"] and set(inspections[index]["dates"]).isdisjoint(target_dates):
             skipped_out_of_scope_files.append(str(path))
+            progress(f"跳过菜品输入 {index + 1}/{len(dish_inputs)}: {short_path(path)} 不在目标窗口内。")
             continue
+        progress(f"扫描菜品输入 {index + 1}/{len(dish_inputs)}: {short_path(path)}")
         excluded_dates = later_dates[index]
         headers: list[str] = []
         current_sheet = ""
         sheet_title = ""
+        file_scanned_rows = 0
+        file_processed_rows = 0
         for sheet, row_number, values in read_workbook_sheet_rows(path):
             if sheet["path"] != current_sheet:
                 current_sheet = sheet["path"]
@@ -1379,6 +1404,7 @@ def profile_dish_sales_mix(
                 continue
             if row_number < 4 or not headers or not values:
                 continue
+            file_scanned_rows += 1
             row = row_dict(headers, values)
             parsed_date = parse_date(row.get("营业日", ""))
             if not parsed_date:
@@ -1399,6 +1425,7 @@ def profile_dish_sales_mix(
             dish_name = row.get("菜品名称", "") or "未知菜品"
             income = safe_float(row.get("菜品收入"))
             processed_rows += 1
+            file_processed_rows += 1
             processed_dates.add(parsed_date)
             period_counts[period_key] += 1
             period_dates[period_key].add(parsed_date)
@@ -1407,7 +1434,17 @@ def profile_dish_sales_mix(
 
             add_to_dish_agg(groups[(period_key, period_label, store, dish_name)], row, parsed_date)
             add_to_dish_agg(groups[(period_key, period_label, ALL_STORES_LABEL, dish_name)], row, parsed_date)
+            if file_scanned_rows % PROGRESS_ROW_INTERVAL == 0:
+                progress(
+                    f"菜品输入 {index + 1}/{len(dish_inputs)} 已扫描 {file_scanned_rows:,} 行，"
+                    f"纳入店内销售 {file_processed_rows:,} 行。"
+                )
+        progress(
+            f"完成菜品输入 {index + 1}/{len(dish_inputs)}: 扫描 {file_scanned_rows:,} 行，"
+            f"纳入店内销售 {file_processed_rows:,} 行。"
+        )
 
+    progress("汇总销售额菜品比例。")
     rows: list[dict[str, Any]] = []
     for (period_key, period_label, store, dish_name), agg in groups.items():
         sums = agg["sums"]
@@ -1425,6 +1462,7 @@ def profile_dish_sales_mix(
         })
     rows.sort(key=lambda row: (str(row["period_key"]), str(row["门店名称"]), -float(row.get("dish_income") or 0), str(row["菜品名称"])))
     write_csv(output_dir / output_name, rows, DISH_SALES_MIX_FIELDS)
+    progress(f"写出销售额菜品比例: {output_name} rows={len(rows):,}")
 
     current_key = "current"
     current_revenue = dine_in_revenue_by_period_store.get((current_key, ALL_STORES_LABEL), 0.0)
@@ -1475,7 +1513,17 @@ def profile(
     dish_inputs: list[Path] | None = None,
     catalog_path: Path | None = None,
 ) -> dict[str, Any]:
-    inspections = [inspect_workbook(path) for path in inputs]
+    progress(f"开始周报 profiling: business_inputs={len(inputs)}, dish_inputs={len(dish_inputs or [])}")
+    inspections = []
+    for index, path in enumerate(inputs, start=1):
+        progress(f"检查业务输入 {index}/{len(inputs)}: {short_path(path)}")
+        info = inspect_workbook(path)
+        inspections.append(info)
+        progress(
+            f"业务输入 {index}/{len(inputs)} 覆盖: "
+            f"{date_text(info['min_date']) if info['min_date'] else '未知'}-"
+            f"{date_text(info['max_date']) if info['max_date'] else '未知'}"
+        )
     trend_windows = build_trend_comparison_windows(target_windows)
     later_dates: list[set[date]] = []
     union_later: set[date] = set()
@@ -1495,10 +1543,14 @@ def profile(
     processed_rows = 0
 
     for index, path in enumerate(inputs):
+        progress(f"扫描业务输入 {index + 1}/{len(inputs)}: {short_path(path)}")
         excluded_dates = later_dates[index]
         headers: list[str] = []
         current_sheet = ""
         sheet_title = ""
+        file_processed_rows = 0
+        file_min_date: date | None = None
+        file_max_date: date | None = None
         for sheet, row_number, values in read_workbook_sheet_rows(path):
             if sheet["path"] != current_sheet:
                 current_sheet = sheet["path"]
@@ -1535,6 +1587,9 @@ def profile(
             trend_window = trend_comparison_window_for(parsed_date, trend_windows)
             processed_dates.add(parsed_date)
             processed_rows += 1
+            file_processed_rows += 1
+            file_min_date = parsed_date if file_min_date is None else min(file_min_date, parsed_date)
+            file_max_date = parsed_date if file_max_date is None else max(file_max_date, parsed_date)
 
             weekly_key = (date_text(start), date_text(end), week_label(start)) + key_store
             add_to_agg(weekly_store[weekly_key], row, parsed_date)
@@ -1587,8 +1642,19 @@ def profile(
             daypart = row.get("餐段", "") or "未知餐段"
             hour = row.get("时段", "") or "未知时段"
             add_to_agg(weekly_store_daypart[weekly_key + (target_name, daypart, hour)], row, parsed_date)
+            if file_processed_rows % PROGRESS_ROW_INTERVAL == 0:
+                progress(
+                    f"业务输入 {index + 1}/{len(inputs)} 已纳入 {file_processed_rows:,} 行，"
+                    f"累计 {processed_rows:,} 行。"
+                )
+        progress(
+            f"完成业务输入 {index + 1}/{len(inputs)}: 纳入 {file_processed_rows:,} 行，"
+            f"日期 {date_text(file_min_date) if file_min_date else '无'}-"
+            f"{date_text(file_max_date) if file_max_date else '无'}。"
+        )
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    progress("导出周级、渠道、时段基础事实表。")
     weekly_rows = export_group(weekly_store, ["week_start", "week_end", "week_label", "门店名称", "城市", "商户号"])
     channel_rows = export_group(weekly_store_channel, ["week_start", "week_end", "week_label", "门店名称", "城市", "商户号", "period", "channel"])
     daypart_rows = export_group(weekly_store_daypart, ["week_start", "week_end", "week_label", "门店名称", "城市", "商户号", "period", "餐段", "时段"])
@@ -1603,6 +1669,7 @@ def profile(
         for row in target_rows
     }
     stores = sorted({row["门店名称"] for row in target_rows})
+    progress(f"计算门店对比和经营归因: stores={len(stores)}")
     comparison_rows: list[dict[str, Any]] = []
     driver_rows: list[dict[str, Any]] = []
     for store in stores:
@@ -1637,6 +1704,7 @@ def profile(
         driver_rows.append(driver_pair(store, "同比", current, yoy))
 
     star_rows = classify_stores(comparison_rows)
+    progress("计算时段归因。")
     daypart_comparison_rows = compare_store_dayparts(daypart_rows, target_windows)
     daypart_driver_rows = store_daypart_driver_rows(daypart_comparison_rows)
     dish_sales_mix_meta = profile_dish_sales_mix(
@@ -1647,6 +1715,7 @@ def profile(
         output_prefix="weekly",
     )
 
+    progress("写出周报事实表 CSV。")
     write_csv(output_dir / "weekly_store_metrics.csv", weekly_rows, ["week_start", "week_end", "week_label", "门店名称", "城市", "商户号"] + METRIC_FIELDS)
     write_csv(output_dir / "weekly_store_channel_metrics.csv", channel_rows, ["week_start", "week_end", "week_label", "门店名称", "城市", "商户号", "period", "channel"] + METRIC_FIELDS)
     write_csv(output_dir / "weekly_store_daypart_metrics.csv", daypart_rows, ["week_start", "week_end", "week_label", "门店名称", "城市", "商户号", "period", "餐段", "时段"] + METRIC_FIELDS)
@@ -1674,6 +1743,7 @@ def profile(
     write_csv(output_dir / "store_driver_summary.csv", driver_rows, list(driver_rows[0].keys()) if driver_rows else [])
     write_csv(output_dir / "star_problem_stores.csv", star_rows, list(star_rows[0].keys()) if star_rows else [])
 
+    progress("写出周报 summary JSON。")
     summary = {
         "meta": {
             "inputs": [
@@ -1741,6 +1811,11 @@ def profile(
         ],
     }
     (output_dir / "weekly_meeting_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    progress(
+        f"周报 profiling 完成: rows={processed_rows:,}, stores={len(stores)}, "
+        f"coverage={date_text(min(processed_dates)) if processed_dates else '无'}-"
+        f"{date_text(max(processed_dates)) if processed_dates else '无'}"
+    )
     return summary
 
 
