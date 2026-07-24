@@ -12,10 +12,9 @@ from typing import Any
 from generate_weekly_meeting_report_html import (
     HTML_TEMPLATE as WEEKLY_HTML_TEMPLATE,
     aggregate_dayparts,
-    attach_dish_examples,
-    compact_stall_drivers,
+    attach_daypart_slots,
+    compact_daypart_drivers,
     median,
-    metric_lookup,
     pct_change,
     read_csv,
     read_optional_csv,
@@ -75,10 +74,8 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
     dayparts = read_csv(input_dir / "monthly_store_daypart_metrics.csv")
     trend_comparison_path = input_dir / "monthly_trend_comparison_metrics.csv"
     trend_comparison = read_csv(trend_comparison_path) if trend_comparison_path.exists() else []
-    stall_comparison = read_optional_csv(input_dir / "monthly_store_stall_comparison.csv")
-    stall_drivers = read_optional_csv(input_dir / "monthly_store_stall_driver_summary.csv")
-    dish_drivers = read_optional_csv(input_dir / "monthly_store_stall_dish_drivers.csv")
-    match_summary = metric_lookup(read_optional_csv(input_dir / "dish_catalog_match_summary.csv"))
+    daypart_comparison = read_optional_csv(input_dir / "monthly_store_daypart_comparison.csv")
+    daypart_drivers = read_optional_csv(input_dir / "monthly_store_daypart_driver_summary.csv")
 
     segment_by_store = {row["门店名称"]: row for row in segments}
     driver_by_store = {
@@ -89,11 +86,11 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
     for row in comparison:
         segment = segment_by_store.get(row["门店名称"], {})
         driver = driver_by_store.get(row["门店名称"], {})
-        stall_driver = next((item for item in stall_drivers if item.get("门店名称") == row["门店名称"] and item.get("basis") == "环比"), {})
+        daypart_driver = next((item for item in daypart_drivers if item.get("门店名称") == row["门店名称"] and item.get("basis") == "环比"), {})
         row["segment"] = segment.get("segment", "未分型")
         row["segment_reason"] = str(segment.get("reason", "")).replace("本周", "本月")
         row["top_negative_factor"] = driver.get("top_negative_factor", "")
-        row["top_stall_signal"] = stall_driver.get("stall_signal", "")
+        row["top_daypart_signal"] = daypart_driver.get("daypart_signal", "")
         row["wow_order_volume_contribution"] = driver.get("order_volume_contribution")
         row["wow_aov_contribution"] = driver.get("aov_contribution")
         row["wow_dine_in_delta"] = driver.get("dine_in_delta")
@@ -178,13 +175,12 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
         "trend": [],
         "trend_entities": build_trend_comparison_entities(trend_comparison),
         "trend_note": "自然月口径；仅展示最近 6 个月，实线=本年，虚线=同期。",
-        "stall_attribution": {
-            "enabled": bool(summary["meta"].get("stall_attribution", {}).get("enabled")),
-            "meta": summary["meta"].get("stall_attribution", {}),
-            "comparison": stall_comparison,
-            "drivers": attach_dish_examples(compact_stall_drivers(stall_drivers, "环比"), dish_drivers, "环比"),
-            "yoy_drivers": attach_dish_examples(compact_stall_drivers(stall_drivers, "同比"), dish_drivers, "同比"),
-            "match_summary": match_summary,
+        "daypart_attribution": {
+            "enabled": bool(summary["meta"].get("daypart_attribution", {}).get("enabled", True)) and bool(daypart_drivers),
+            "meta": summary["meta"].get("daypart_attribution", {}),
+            "comparison": daypart_comparison,
+            "drivers": attach_daypart_slots(compact_daypart_drivers(daypart_drivers, "环比"), daypart_comparison, "环比"),
+            "yoy_drivers": attach_daypart_slots(compact_daypart_drivers(daypart_drivers, "同比"), daypart_comparison, "同比"),
         },
         "data_gaps": summary.get("data_gaps", []),
     }

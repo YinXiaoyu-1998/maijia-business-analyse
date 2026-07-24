@@ -15,20 +15,22 @@ from profile_weekly_meeting_data import (
     METRIC_FIELDS,
     add_to_agg,
     classify_stores,
+    compare_store_dayparts,
     date_text,
     diff,
     driver_pair,
     export_group,
     inspect_workbook,
     parse_date,
-    profile_dish_inputs,
     read_workbook_sheet_rows,
     row_dict,
     safe_float,
+    store_daypart_driver_rows,
     store_key,
     target_period_for,
     write_csv,
     new_agg,
+    DAYPART_DRIVER_SUMMARY_FIELDS,
 )
 
 
@@ -261,10 +263,20 @@ def profile(
     for row in star_rows:
         if isinstance(row.get("reason"), str):
             row["reason"] = row["reason"].replace("本周", "本月")
+    daypart_comparison_rows = compare_store_dayparts(daypart_rows, target_windows)
+    daypart_driver_rows = store_daypart_driver_rows(daypart_comparison_rows)
 
     write_csv(output_dir / "monthly_store_metrics.csv", monthly_rows, ["month_start", "month_end", "month_label", "门店名称", "城市", "商户号"] + METRIC_FIELDS)
     write_csv(output_dir / "monthly_store_channel_metrics.csv", channel_rows, ["month_start", "month_end", "month_label", "门店名称", "城市", "商户号", "period", "channel"] + METRIC_FIELDS)
     write_csv(output_dir / "monthly_store_daypart_metrics.csv", daypart_rows, ["month_start", "month_end", "month_label", "门店名称", "城市", "商户号", "period", "餐段", "时段"] + METRIC_FIELDS)
+    daypart_comparison_fields = ["门店名称", "餐段", "时段"]
+    for prefix in ["current", "previous", "yoy"]:
+        daypart_comparison_fields.extend([f"{prefix}_{field}" for field in METRIC_FIELDS])
+    for prefix in ["wow", "yoy"]:
+        for field in ["net_revenue", "gross_sales", "positive_orders", "customer_count", "dine_in_revenue", "delivery_revenue", "discount_amount"]:
+            daypart_comparison_fields.extend([f"{prefix}_{field}_delta", f"{prefix}_{field}_pct"])
+    write_csv(output_dir / "monthly_store_daypart_comparison.csv", daypart_comparison_rows, daypart_comparison_fields)
+    write_csv(output_dir / "monthly_store_daypart_driver_summary.csv", daypart_driver_rows, DAYPART_DRIVER_SUMMARY_FIELDS)
     write_csv(
         output_dir / "monthly_trend_comparison_metrics.csv",
         trend_comparison_rows,
@@ -281,26 +293,7 @@ def profile(
     write_csv(output_dir / "store_driver_summary.csv", driver_rows, list(driver_rows[0].keys()) if driver_rows else [])
     write_csv(output_dir / "star_problem_stores.csv", star_rows, list(star_rows[0].keys()) if star_rows else [])
 
-    stall_attribution: dict[str, Any] = {"enabled": False}
-    stall_gap = "当前未提供自助菜品取数和菜品库基础信息，不能做档口穿透归因。"
-    if dish_inputs and catalog_path:
-        stall_attribution = profile_dish_inputs(dish_inputs, catalog_path, output_dir, target_windows, output_prefix="monthly")
-        period_coverage = stall_attribution.get("period_coverage", {})
-        missing_periods = [
-            period_coverage.get(key, {}).get("label", key)
-            for key in ["current", "previous", "yoy"]
-            if not period_coverage.get(key, {}).get("rows")
-        ]
-        missing_note = (
-            f"；菜品主题数据缺少{'、'.join(missing_periods)}，对应档口/菜品同比环比变化会显示为 N/A"
-            if missing_periods else ""
-        )
-        stall_gap = (
-            f"档口按菜品库「总部菜品.基础分类」归因；菜品库匹配率 {stall_attribution.get('match_rate', 0):.1%}，"
-            f"未匹配和重名菜品单独归类；总部套餐暂未拆解到套餐组成菜品{missing_note}。"
-        )
-    elif dish_inputs or catalog_path:
-        stall_gap = "档口穿透需要同时提供自助菜品取数和菜品库基础信息；当前只提供了一类输入，未启用档口归因。"
+    ignored_stall_inputs = bool(dish_inputs or catalog_path)
 
     summary = {
         "meta": {
@@ -331,14 +324,22 @@ def profile(
                 "monthly_store_metrics.csv",
                 "monthly_store_channel_metrics.csv",
                 "monthly_store_daypart_metrics.csv",
+                "monthly_store_daypart_comparison.csv",
+                "monthly_store_daypart_driver_summary.csv",
                 "monthly_trend_comparison_metrics.csv",
                 "monthly_store_comparison.csv",
                 "store_driver_summary.csv",
                 "star_problem_stores.csv",
-                *stall_attribution.get("outputs", []),
                 "monthly_meeting_summary.json",
             ],
-            "stall_attribution": stall_attribution,
+            "daypart_attribution": {
+                "enabled": True,
+                "basis": "营业分组表「时段」字段；按门店、餐段、时段汇总订单营业收入后比较本月、上月、去年同月。",
+                "outputs": [
+                    "monthly_store_daypart_comparison.csv",
+                    "monthly_store_daypart_driver_summary.csv",
+                ],
+            },
         },
         "comparison": comparison_rows,
         "drivers": driver_rows,
@@ -349,7 +350,11 @@ def profile(
         "monthly_trend_comparison": trend_comparison_rows,
         "data_gaps": [
             "当前营业分组表没有网评分数、评论文本字段，不能做网评分数和词云分析。",
-            stall_gap,
+            "时段归因基于营业分组表「时段」字段，可定位收入变化发生在哪些时段；不直接解释菜品或现场运营原因。",
+            *(
+                ["已提供菜品或菜品库输入，但新月报逻辑已用时段归因替代档口/菜品归因，未生成档口归因表。"]
+                if ignored_stall_inputs else []
+            ),
         ],
     }
     (output_dir / "monthly_meeting_summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
