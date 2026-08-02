@@ -17,6 +17,7 @@ Use this skill to run the Maijia Xiaoguan operating-data workflow end to end:
 - Treat source exports as sensitive private business data. Do not paste row-level records into chat.
 - Do not load a huge workbook in full if a streaming script can answer the task.
 - Recalculate ratios after aggregation. Do not sum or average precomputed rates unless a weighted denominator is known.
+- For weekly/monthly meeting reports, `业务收入` / `收入` must use `营业分组表.订单营业收入` (`net_revenue`), not `营业额(元)` (`gross_sales`). Keep `gross_sales` only as a separately labeled source/diagnostic field when explicitly needed.
 - Separate facts from interpretation: scripts create fact tables; the agent writes management conclusions from those tables.
 - Avoid profit or root-cause certainty unless cost, labor, rent, commission, menu margin, and qualitative evidence are available.
 

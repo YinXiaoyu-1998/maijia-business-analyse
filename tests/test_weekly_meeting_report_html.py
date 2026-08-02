@@ -23,6 +23,58 @@ def write_csv(path: Path, rows: list[dict[str, object]]) -> None:
 
 
 class WeeklyMeetingReportHtmlTest(unittest.TestCase):
+    def test_payload_uses_order_revenue_not_gross_sales_for_business_revenue(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            input_dir = Path(tmp)
+            (input_dir / "weekly_meeting_summary.json").write_text(
+                json.dumps(
+                    {
+                        "meta": {
+                            "coverage_start": "2026/07/13",
+                            "coverage_end": "2026/07/19",
+                            "target_windows": {
+                                "current": {"label": "本周", "start": "2026/07/13", "end": "2026/07/19"},
+                                "previous": {"label": "环比周", "start": "2026/07/06", "end": "2026/07/12"},
+                                "yoy": {"label": "同比周", "start": "2025/07/14", "end": "2025/07/20"},
+                            },
+                            "processed_rows": 3,
+                            "store_count": 1,
+                            "outputs": [],
+                        },
+                        "data_gaps": [],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            write_csv(
+                input_dir / "weekly_store_comparison.csv",
+                [
+                    {
+                        "门店名称": "麦家小馆（甲店）",
+                        "current_net_revenue": 300,
+                        "previous_net_revenue": 200,
+                        "yoy_net_revenue": 150,
+                        "current_gross_sales": 999,
+                        "previous_gross_sales": 888,
+                        "yoy_gross_sales": 777,
+                        "current_positive_orders": 10,
+                    }
+                ],
+            )
+            write_csv(input_dir / "star_problem_stores.csv", [{"门店名称": "麦家小馆（甲店）", "segment": "明星门店", "reason": ""}])
+            write_csv(input_dir / "store_driver_summary.csv", [{"门店名称": "麦家小馆（甲店）", "basis": "环比"}])
+            write_csv(input_dir / "weekly_store_channel_metrics.csv", [{"period": "本周", "门店名称": "麦家小馆（甲店）", "channel": "堂食", "net_revenue": 300}])
+            write_csv(input_dir / "weekly_store_daypart_metrics.csv", [{"period": "本周", "门店名称": "麦家小馆（甲店）", "餐段": "午餐", "时段": "12", "net_revenue": 300}])
+            write_csv(input_dir / "weekly_store_metrics.csv", [{"week_label": "07/13-07/19", "week_end": "2026/07/19", "门店名称": "麦家小馆（甲店）", "net_revenue": 300}])
+
+            payload = report.build_payload(input_dir, "麦家小馆")
+
+        self.assertEqual(payload["kpis"]["current_revenue"], 300)
+        self.assertEqual(payload["kpis"]["wow_pct"], 0.5)
+        self.assertEqual(payload["kpis"]["yoy_pct"], 1.0)
+        self.assertEqual(payload["meta"]["revenue_basis"], report.REVENUE_BASIS_NOTE)
+
     def test_payload_builds_hourly_revenue_entities_without_daypart_dimension(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             input_dir = Path(tmp)
@@ -252,6 +304,9 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
         self.assertIn("function positionTooltip", report.HTML_TEMPLATE)
         self.assertIn("bounds.width - tipWidth - 8", report.HTML_TEMPLATE)
         self.assertNotIn("event.clientX - bounds.left + 12", report.HTML_TEMPLATE)
+
+    def test_template_states_business_revenue_basis(self) -> None:
+        self.assertIn("业务收入口径为营业分组表“订单营业收入”", report.HTML_TEMPLATE)
 
 
 if __name__ == "__main__":

@@ -249,6 +249,7 @@ def median(values: list[float]) -> float:
 
 
 STORE_SIZE_ORDER = ["大店", "小店", "未分组"]
+REVENUE_BASIS_NOTE = "业务收入=营业分组表「订单营业收入」；不使用「营业额(元)」。"
 
 
 def build_segment_groups(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -415,6 +416,7 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
             "company": company,
             "generated": date.today().isoformat(),
             **summary["meta"],
+            "revenue_basis": REVENUE_BASIS_NOTE,
         },
         "kpis": {
             "current_revenue": current_revenue,
@@ -691,7 +693,7 @@ HTML_TEMPLATE = r'''<!doctype html>
     <section class="section" id="summary">
       <div class="section-head">
         <div><div class="kicker">01 Executive Summary</div><h2>先看结论：哪些门店值得复制，哪些门店要复盘</h2></div>
-        <p class="note">本页所有指标均为聚合后重新计算；时段归因基于营业分组表“时段”字段。</p>
+        <p class="note">本页业务收入口径为营业分组表“订单营业收入”；所有指标均为聚合后重新计算，时段归因基于“时段”字段。</p>
       </div>
       <div class="grid-4" id="kpiCards"></div>
       <div id="segmentRules"></div>
