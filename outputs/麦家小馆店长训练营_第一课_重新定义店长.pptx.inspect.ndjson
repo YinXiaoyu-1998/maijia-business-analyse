@@ -1,0 +1,246 @@
+{"kind":"deck","id":"pr/ut7ucy","name":"Deck"}
+{"kind":"layout","layoutId":"cca33bdd-a5fd-4b2a-9c61-f4623a439e9c","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"f2d10930-71ce-4d36-a525-6b3b1b650f31","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/5iaw9j","slide":1,"title":"MAIJIA STORE MANAGER BOOTCAMP","textShapes":8}
+{"kind":"textbox","id":"sh/xkf6dcbu","slide":1,"text":"MAIJIA STORE MANAGER BOOTCAMP","textPreview":"MAIJIA STORE MANAGER BOOTCAMP","textChars":29,"textLines":1,"bbox":[54,50,500,34]}
+{"kind":"shape","id":"sh/mtwra5gb","slide":1,"bbox":[54,94,160,3]}
+{"kind":"textbox","id":"sh/fepkzupw","slide":1,"text":"重新定义店长","textPreview":"重新定义店长","textChars":6,"textLines":1,"bbox":[54,155,850,190]}
+{"kind":"textbox","id":"sh/4r65wjud","slide":1,"text":"第一课：麦家小馆到底需要什么样的店长","textPreview":"第一课：麦家小馆到底需要什么样的店长","textChars":18,"textLines":1,"bbox":[58,380,700,86]}
+{"kind":"shape","id":"sh/xc3ylc7u","slide":1,"bbox":[900,95,280,430]}
+{"kind":"textbox","id":"sh/mlkjm1cf","slide":1,"text":"第一课","textPreview":"第一课","textChars":3,"textLines":1,"bbox":[940,145,200,44]}
+{"kind":"textbox","id":"sh/f6dcbulw","slide":1,"text":"重新定义\n店长","textPreview":"重新定义 | 店长","textChars":7,"textLines":2,"bbox":[940,230,200,170]}
+{"kind":"textbox","id":"sh/4fu18jqh","slide":1,"text":"从岗位认知\n到角色担当","textPreview":"从岗位认知 | 到角色担当","textChars":11,"textLines":2,"bbox":[940,430,200,70]}
+{"kind":"textbox","id":"sh/x0nuxc3y","slide":1,"text":"麦家小馆店长训练营","textPreview":"麦家小馆店长训练营","textChars":9,"textLines":1,"bbox":[54,670,360,24]}
+{"kind":"textbox","id":"sh/lkjm1cfa","slide":1,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[1170,670,56,24]}
+{"kind":"notes","id":"nt/5iaw9j","slide":1,"text":"各位店长，大家好。今天是麦家小馆店长训练营的第一课。这一课，我们先不讲营业额怎么提升，也不讲排班、库存、投诉处理。那些都重要，但还不是第一件事。第一件事，是先回答一个问题：麦家小馆到底需要什么样的店长？如果这个问题没有想清楚，后面的动作、表格、制度都会变成机械执行。所以今天这节课，叫重新定义店长。"}
+{"kind":"slide","id":"sl/qt92ra","slide":2,"title":"课程定位","textShapes":7}
+{"kind":"textbox","id":"sh/fmlkjm1c","slide":2,"text":"课程定位","textPreview":"课程定位","textChars":4,"textLines":1,"bbox":[54,42,600,26]}
+{"kind":"textbox","id":"sh/87ed8bat","slide":2,"text":"第一课先回答身份问题","textPreview":"第一课先回答身份问题","textChars":10,"textLines":1,"bbox":[54,75,850,70]}
+{"kind":"shape","id":"sh/xs72x4na","slide":2,"bbox":[54,150,100,4]}
+{"kind":"textbox","id":"sh/qtcj6tov","slide":2,"text":"麦家小馆店长训练营","textPreview":"麦家小馆店长训练营","textChars":9,"textLines":1,"bbox":[54,670,360,24]}
+{"kind":"textbox","id":"sh/je9cvixc","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[1170,670,56,24]}
+{"kind":"textbox","id":"sh/8z25kb6x","slide":2,"text":"在学习方法之前，先建立角色认知。","textPreview":"在学习方法之前，先建立角色认知。","textChars":16,"textLines":1,"bbox":[90,190,900,52]}
+{"kind":"shape","id":"sh/1gvy90je","slide":2,"bbox":[90,285,1030,250]}
+{"kind":"textbox","id":"sh/qpg3ex0n","slide":2,"text":"这节课不是先教店长“做什么”。\n这节课先回答：店长到底是谁。","textPreview":"这节课不是先教店长“做什么”。 | 这节课先回答：店长到底是谁。","textChars":30,"textLines":2,"bbox":[130,330,820,88]}
+{"kind":"textbox","id":"sh/fa9w3m94","slide":2,"text":"动作可以学，表格可以填，制度可以背。\n但一个店长真正的力量，来自他对自己这个角色的理解。","textPreview":"动作可以学，表格可以填，制度可以背。 | 但一个店长真正的力量，来自他对自己这个角色的理解。","textChars":44,"textLines":2,"bbox":[130,445,850,70]}
+{"kind":"notes","id":"nt/qt92ra","slide":2,"text":"这一页要把课程的高度立住。老师可以讲：很多培训一上来就教动作，比如怎么排班、怎么盘点、怎么处理投诉。但第一课不能这样。因为动作背后是人，人的背后是角色认知。一个人如果只把自己当高级服务员，他就会只会补位；如果只把自己当管人的人，他就会每天盯错误；如果只把自己当完成营业额的人，他就会只盯数字。我们今天先把店长这个角色讲清楚。"}
+{"kind":"slide","id":"sl/vqzbx6","slide":3,"title":"核心命题","textShapes":10}
+{"kind":"textbox","id":"sh/zed8v6ps","slide":3,"text":"核心命题","textPreview":"核心命题","textChars":4,"textLines":1,"bbox":[54,42,600,26]}
+{"kind":"textbox","id":"sh/oza1gvy9","slide":3,"text":"店长不是一个职位，而是一个社会角色","textPreview":"店长不是一个职位，而是一个社会角色","textChars":17,"textLines":1,"bbox":[54,75,850,70]}
+{"kind":"shape","id":"sh/hk3q5o7q","slide":3,"bbox":[54,150,100,4]}
+{"kind":"textbox","id":"sh/65wjudg7","slide":3,"text":"麦家小馆店长训练营","textPreview":"麦家小馆店长训练营","textChars":9,"textLines":1,"bbox":[54,670,360,24]}
+{"kind":"textbox","id":"sh/zqtcj6to","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[1170,670,56,24]}
+{"kind":"textbox","id":"sh/obm58z25","slide":3,"text":"很多人认为店长只是：","textPreview":"很多人认为店长只是：","textChars":10,"textLines":1,"bbox":[90,190,420,36]}
+{"kind":"shape","id":"sh/hwfyxobm","slide":3,"bbox":[90,260,280,110]}
+{"kind":"textbox","id":"sh/a9w3m94f","slide":3,"text":"负责营业额","textPreview":"负责营业额","textChars":5,"textLines":1,"bbox":[110,295,240,42]}
+{"kind":"shape","id":"sh/zupwb2hw","slide":3,"bbox":[420,260,280,110]}
+{"kind":"textbox","id":"sh/7y1kre1w","slide":3,"text":"管理员工","textPreview":"管理员工","textChars":4,"textLines":1,"bbox":[440,295,240,42]}
+{"kind":"shape","id":"sh/ed8v6psf","slide":3,"bbox":[750,260,280,110]}
+{"kind":"textbox","id":"sh/p4r65wju","slide":3,"text":"执行制度","textPreview":"执行制度","textChars":4,"textLines":1,"bbox":[770,295,240,42]}
+{"kind":"shape","id":"sh/wjudg7ad","slide":3,"bbox":[90,430,1020,1]}
+{"kind":"textbox","id":"sh/7qpg3ex0","slide":3,"text":"这些都对，但都只是表象。","textPreview":"这些都对，但都只是表象。","textChars":12,"textLines":1,"bbox":[90,470,740,46]}
+{"kind":"textbox","id":"sh/i5sneloj","slide":3,"text":"真正的店长，要同时承载经营、团队、顾客、品牌和复杂关系。","textPreview":"真正的店长，要同时承载经营、团队、顾客、品牌和复杂关系。","textChars":28,"textLines":1,"bbox":[90,535,960,42]}
+{"kind":"notes","id":"nt/vqzbx6","slide":3,"text":"我想先送给大家一句话：店长不是一个职位，而是一个社会角色。很多人认为，店长就是负责营业额；也有人认为，店长就是管理员工；还有人认为，店长就是执行公司的制度。这些对不对？都对。但都只是表面。如果只把店长理解成管营业额的人，店长就会每天只盯数字；如果只理解成管人的人，就会每天只盯问题；如果只理解成执行制度的人，就会变成传话的人。麦家小馆需要的店长，不是传话的人，也不是简单管人的人，而是门店的第一责任人。"}
+{"kind":"slide","id":"sl/cfno5j","slide":4,"title":"角色切换","textShapes":15}
+{"kind":"textbox","id":"sh/tgfmlkjm","slide":4,"text":"角色切换","textPreview":"角色切换","textChars":4,"textLines":1,"bbox":[54,42,600,26]}
+{"kind":"textbox","id":"sh/mp0bi9s3","slide":4,"text":"优秀店长一定具备多面性","textPreview":"优秀店长一定具备多面性","textChars":11,"textLines":1,"bbox":[54,75,850,70]}
+{"kind":"shape","id":"sh/bat47y1k","slide":4,"bbox":[54,150,100,4]}
+{"kind":"textbox","id":"sh/47y1kre1","slide":4,"text":"麦家小馆店长训练营","textPreview":"麦家小馆店长训练营","textChars":9,"textLines":1,"bbox":[54,670,360,24]}
+{"kind":"textbox","id":"sh/tsvu9kni","slide":4,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[1170,670,56,24]}
+{"kind":"textbox","id":"sh/m1cfa9w3","slide":4,"text":"店长每天都在不同场景之间切换。","textPreview":"店长每天都在不同场景之间切换。","textChars":15,"textLines":1,"bbox":[90,180,900,42]}
+{"kind":"textbox","id":"sh/bm58z25k","slide":4,"text":"面对营业额","textPreview":"面对营业额","textChars":5,"textLines":1,"bbox":[120,250,250,34]}
+{"kind":"shape","id":"sh/4byhgn29","slide":4,"bbox":[365,266,110,1]}
+{"kind":"textbox","id":"sh/twra5gbq","slide":4,"text":"像经营者","textPreview":"像经营者","textChars":4,"textLines":1,"bbox":[510,246,520,42]}
+{"kind":"textbox","id":"sh/1cfa9w3m","slide":4,"text":"面对员工","textPreview":"面对员工","textChars":4,"textLines":1,"bbox":[120,318,250,34]}
+{"kind":"shape","id":"sh/crmhk3q5","slide":4,"bbox":[365,334,110,1]}
+{"kind":"textbox","id":"sh/j6tovaho","slide":4,"text":"像管理者","textPreview":"像管理者","textChars":4,"textLines":1,"bbox":[510,314,520,42]}
+{"kind":"textbox","id":"sh/ulwval87","slide":4,"text":"面对新人","textPreview":"面对新人","textChars":4,"textLines":1,"bbox":[120,386,250,34]}
+{"kind":"shape","id":"sh/1kre1w7m","slide":4,"bbox":[365,402,110,1]}
+{"kind":"textbox","id":"sh/c3ylc7u5","slide":4,"text":"像教练","textPreview":"像教练","textChars":3,"textLines":1,"bbox":[510,382,520,42]}
+{"kind":"textbox","id":"sh/ji5snelo","slide":4,"text":"面对矛盾","textPreview":"面对矛盾","textChars":4,"textLines":1,"bbox":[120,454,250,34]}
+{"kind":"shape","id":"sh/uxc3ylc7","slide":4,"bbox":[365,470,110,1]}
+{"kind":"textbox","id":"sh/1w7mp0bi","slide":4,"text":"像成熟的社会人","textPreview":"像成熟的社会人","textChars":7,"textLines":1,"bbox":[510,450,520,42]}
+{"kind":"textbox","id":"sh/8bat47y1","slide":4,"text":"面对品牌","textPreview":"面对品牌","textChars":4,"textLines":1,"bbox":[120,522,250,34]}
+{"kind":"shape","id":"sh/o7qpg3ex","slide":4,"bbox":[365,538,110,1]}
+{"kind":"textbox","id":"sh/dsji5sne","slide":4,"text":"像真正的负责人","textPreview":"像真正的负责人","textChars":7,"textLines":1,"bbox":[510,518,520,42]}
+{"kind":"notes","id":"nt/cfno5j","slide":4,"text":"优秀店长一定具备一种能力，叫多面性。什么叫多面性？就是你不能只有一张脸。面对营业额，你要像经营者；面对员工，你要像管理者；面对新人，你要像教练；面对矛盾，你要像一个成熟的社会人；面对品牌和责任，你要像真正的负责人。这不是要求大家变复杂，而是要求大家变成熟。"}
+{"kind":"slide","id":"sl/l66qxy","slide":5,"title":"底层模型","textShapes":20}
+{"kind":"textbox","id":"sh/u18jqh0f","slide":5,"text":"底层模型","textPreview":"底层模型","textChars":4,"textLines":1,"bbox":[54,42,600,26]}
+{"kind":"textbox","id":"sh/1orytsvu","slide":5,"text":"麦家小馆店长五项修炼","textPreview":"麦家小馆店长五项修炼","textChars":10,"textLines":1,"bbox":[54,75,850,70]}
+{"kind":"shape","id":"sh/c7u54zid","slide":5,"bbox":[54,150,100,4]}
+{"kind":"textbox","id":"sh/judg7ads","slide":5,"text":"麦家小馆店长训练营","textPreview":"麦家小馆店长训练营","textChars":9,"textLines":1,"bbox":[54,670,360,24]}
+{"kind":"textbox","id":"sh/u9knih4b","slide":5,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1170,670,56,24]}
+{"kind":"shape","id":"sh/1032lszq","slide":5,"bbox":[80,210,180,285]}
+{"kind":"textbox","id":"sh/cfa9w3m9","slide":5,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[102,235,55,30]}
+{"kind":"textbox","id":"sh/nyd0z610","slide":5,"text":"经营有道","textPreview":"经营有道","textChars":4,"textLines":1,"bbox":[102,285,138,42]}
+{"kind":"textbox","id":"sh/udg7adsj","slide":5,"text":"懂经营\n会分析\n能创造结果","textPreview":"懂经营 | 会分析 | 能创造结果","textChars":13,"textLines":3,"bbox":[102,365,135,92]}
+{"kind":"shape","id":"sh/czed8v6p","slide":5,"bbox":[310,210,180,285]}
+{"kind":"textbox","id":"sh/5kb6xkf6","slide":5,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[332,235,55,30]}
+{"kind":"textbox","id":"sh/ytsvu9kn","slide":5,"text":"管理有序","textPreview":"管理有序","textChars":4,"textLines":1,"bbox":[332,285,138,42]}
+{"kind":"textbox","id":"sh/neloj2t8","slide":5,"text":"制度清晰\n执行到位\n流程稳定","textPreview":"制度清晰 | 执行到位 | 流程稳定","textChars":14,"textLines":3,"bbox":[332,365,135,92]}
+{"kind":"shape","id":"sh/cbulwval","slide":5,"bbox":[540,210,180,285]}
+{"kind":"textbox","id":"sh/5sneloj2","slide":5,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[562,235,55,30]}
+{"kind":"textbox","id":"sh/u54zidon","slide":5,"text":"育人有方","textPreview":"育人有方","textChars":4,"textLines":1,"bbox":[562,285,138,42]}
+{"kind":"textbox","id":"sh/nqxs72x4","slide":5,"text":"培养人才\n帮助员工成长","textPreview":"培养人才 | 帮助员工成长","textChars":11,"textLines":2,"bbox":[562,365,135,92]}
+{"kind":"shape","id":"sh/gbq1oryt","slide":5,"bbox":[770,210,180,285]}
+{"kind":"textbox","id":"sh/5wjudg7a","slide":5,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[792,235,55,30]}
+{"kind":"textbox","id":"sh/t47y1kre","slide":5,"text":"处事有度","textPreview":"处事有度","textChars":4,"textLines":1,"bbox":[792,285,138,42]}
+{"kind":"textbox","id":"sh/0je9cvix","slide":5,"text":"通人性\n知理性\n守原则","textPreview":"通人性 | 知理性 | 守原则","textChars":11,"textLines":3,"bbox":[792,365,135,92]}
+{"kind":"shape","id":"sh/byhgn29g","slide":5,"bbox":[1000,210,180,285]}
+{"kind":"textbox","id":"sh/idonyd0z","slide":5,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1022,235,55,30]}
+{"kind":"textbox","id":"sh/tcj6tova","slide":5,"text":"担当有魂","textPreview":"担当有魂","textChars":4,"textLines":1,"bbox":[1022,285,138,42]}
+{"kind":"textbox","id":"sh/0rqd4vmt","slide":5,"text":"有责任\n有价值观\n有品牌意识","textPreview":"有责任 | 有价值观 | 有品牌意识","textChars":14,"textLines":3,"bbox":[1022,365,135,92]}
+{"kind":"textbox","id":"sh/b6xkf6dc","slide":5,"text":"五项修炼回答一个问题：麦家小馆需要什么样的店长。","textPreview":"五项修炼回答一个问题：麦家小馆需要什么样的店长。","textChars":24,"textLines":1,"bbox":[90,555,950,36]}
+{"kind":"notes","id":"nt/l66qxy","slide":5,"text":"这就是我们今天要讲的麦家小馆店长五项修炼。第一，经营有道；第二，管理有序；第三，育人有方；第四，处事有度；第五，担当有魂。注意，这不是五个口号，而是店长每天都要修炼的五种能力。它回答的不是某一个技巧，而是麦家小馆到底需要什么样的店长。"}
+{"kind":"slide","id":"sl/ow4fsw","slide":6,"title":"第一项修炼","textShapes":12}
+{"kind":"textbox","id":"sh/4nap4r65","slide":6,"text":"第一项修炼","textPreview":"第一项修炼","textChars":5,"textLines":1,"bbox":[54,42,600,26]}
+{"kind":"textbox","id":"sh/b2hwfyxo","slide":6,"text":"经营有道：不能只看结果，要看结果从哪里来","textPreview":"经营有道：不能只看结果，要看结果从哪里来","textChars":20,"textLines":1,"bbox":[54,75,850,70]}
+{"kind":"shape","id":"sh/mhk3q5o7","slide":6,"bbox":[54,150,100,4]}
+{"kind":"textbox","id":"sh/twra5gbq","slide":6,"text":"麦家小馆店长训练营","textPreview":"麦家小馆店长训练营","textChars":9,"textLines":1,"bbox":[54,670,360,24]}
+{"kind":"textbox","id":"sh/4byhgn29","slide":6,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[1170,670,56,24]}
+{"kind":"textbox","id":"sh/bq1oryts","slide":6,"text":"营业额只是结果。真正懂经营，要拆清楚它的来源。","textPreview":"营业额只是结果。真正懂经营，要拆清楚它的来源。","textChars":23,"textLines":1,"bbox":[85,170,1000,38]}
+{"kind":"shape","id":"sh/m58z25kb","slide":6,"bbox":[90,250,280,74]}
+{"kind":"textbox","id":"sh/tsvu9kni","slide":6,"text":"客流","textPreview":"客流","textChars":2,"textLines":1,"bbox":[110,270,240,32]}
+{"kind":"shape","id":"sh/47y1kre1","slide":6,"bbox":[420,250,280,74]}
+{"kind":"textbox","id":"sh/adsji5sn","slide":6,"text":"客单","textPreview":"客单","textChars":2,"textLines":1,"bbox":[440,270,240,32]}
+{"kind":"shape","id":"sh/3ylc7u54","slide":6,"bbox":[750,250,280,74]}
+{"kind":"textbox","id":"sh/sji5snel","slide":6,"text":"复购","textPreview":"复购","textChars":2,"textLines":1,"bbox":[770,270,240,32]}
+{"kind":"shape","id":"sh/h4byhgn2","slide":6,"bbox":[90,370,280,74]}
+{"kind":"textbox","id":"sh/a5gbq1or","slide":6,"text":"渠道","textPreview":"渠道","textChars":2,"textLines":1,"bbox":[110,390,240,32]}
+{"kind":"shape","id":"sh/3m94fu18","slide":6,"bbox":[420,370,280,74]}
+{"kind":"textbox","id":"sh/s72x4nap","slide":6,"text":"爆品","textPreview":"爆品","textChars":2,"textLines":1,"bbox":[440,390,240,32]}
+{"kind":"shape","id":"sh/lszqtcj6","slide":6,"bbox":[750,370,280,74]}
+{"kind":"textbox","id":"sh/a1gvy90j","slide":6,"text":"折扣","textPreview":"折扣","textChars":2,"textLines":1,"bbox":[770,390,240,32]}
+{"kind":"textbox","id":"sh/zidonyd0","slide":6,"text":"店长要问：这个钱靠什么来？能不能持续？有没有利润？有没有复购？","textPreview":"店长要问：这个钱靠什么来？能不能持续？有没有利润？有没有复购？","textChars":31,"textLines":1,"bbox":[90,530,980,64]}
+{"kind":"notes","id":"nt/ow4fsw","slide":6,"text":"第一项修炼，经营有道。店长首先要懂经营。什么叫懂经营？不是只会看营业额。营业额只是结果。真正懂经营的人，要知道营业额从哪里来。是客流带来的？是客单价带来的？是复购带来的？是外卖补贴带来的？是会员转化带来的？还是某几个爆品带来的？同样是增长，有的增长健康，有的增长不健康。比如营业额涨了，但优惠涨得更快；订单多了，但客单下降。店长不能只问今天卖了多少钱，还要问这个钱是怎么来的，靠什么来的，能不能持续。"}
+{"kind":"slide","id":"sl/ioxapp","slide":7,"title":"第二项修炼","textShapes":14}
+{"kind":"textbox","id":"sh/fyxobm58","slide":7,"text":"第二项修炼","textPreview":"第二项修炼","textChars":5,"textLines":1,"bbox":[54,42,600,26]}
+{"kind":"textbox","id":"sh/8jqh0fep","slide":7,"text":"管理有序：让门店忙而不乱","textPreview":"管理有序：让门店忙而不乱","textChars":12,"textLines":1,"bbox":[54,75,850,70]}
+{"kind":"shape","id":"sh/x4nap4r6","slide":7,"bbox":[54,150,100,4]}
+{"kind":"textbox","id":"sh/qpg3ex0n","slide":7,"text":"麦家小馆店长训练营","textPreview":"麦家小馆店长训练营","textChars":9,"textLines":1,"bbox":[54,670,360,24]}
+{"kind":"textbox","id":"sh/fa9w3m94","slide":7,"text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[1170,670,56,24]}
+{"kind":"textbox","id":"sh/8v6psfil","slide":7,"text":"门店不能靠感觉运转。","textPreview":"门店不能靠感觉运转。","textChars":10,"textLines":1,"bbox":[90,175,700,42]}
+{"kind":"shape","id":"sh/xczed8v6","slide":7,"bbox":[90,270,210,165]}
+{"kind":"textbox","id":"sh/qtcj6tov","slide":7,"text":"开店前","textPreview":"开店前","textChars":3,"textLines":1,"bbox":[110,295,170,34]}
+{"kind":"textbox","id":"sh/je9cvixc","slide":7,"text":"检查标准","textPreview":"检查标准","textChars":4,"textLines":1,"bbox":[110,355,170,40]}
+{"kind":"shape","id":"sh/nih4byhg","slide":7,"bbox":[355,270,210,165]}
+{"kind":"textbox","id":"sh/yxobm58z","slide":7,"text":"午高峰","textPreview":"午高峰","textChars":3,"textLines":1,"bbox":[375,295,170,34]}
+{"kind":"textbox","id":"sh/5o7qpg3e","slide":7,"text":"准备到位","textPreview":"准备到位","textChars":4,"textLines":1,"bbox":[375,355,170,40]}
+{"kind":"shape","id":"sh/g3ex0nux","slide":7,"bbox":[620,270,210,165]}
+{"kind":"textbox","id":"sh/r65wjudg","slide":7,"text":"晚高峰","textPreview":"晚高峰","textChars":3,"textLines":1,"bbox":[640,295,170,34]}
+{"kind":"textbox","id":"sh/ylc7u54z","slide":7,"text":"岗位协同","textPreview":"岗位协同","textChars":4,"textLines":1,"bbox":[640,355,170,40]}
+{"kind":"shape","id":"sh/9cvixcze","slide":7,"bbox":[885,270,210,165]}
+{"kind":"textbox","id":"sh/gr2p8nqx","slide":7,"text":"闭店后","textPreview":"闭店后","textChars":3,"textLines":1,"bbox":[905,295,170,34]}
+{"kind":"textbox","id":"sh/rytsvu9k","slide":7,"text":"复盘改进","textPreview":"复盘改进","textChars":4,"textLines":1,"bbox":[905,355,170,40]}
+{"kind":"textbox","id":"sh/yd0z6103","slide":7,"text":"有标准、有流程、有纪律、有检查、有复盘，门店才稳定、可复制。","textPreview":"有标准、有流程、有纪律、有检查、有复盘，门店才稳定、可复制。","textChars":30,"textLines":1,"bbox":[90,520,990,44]}
+{"kind":"notes","id":"nt/ioxapp","slide":7,"text":"第二项修炼，管理有序。一家门店不能靠感觉运转。不能今天店长心情好，标准就高一点；明天店长忙，标准就松一点。管理有序，就是门店有标准、有流程、有纪律、有检查、有复盘。员工知道自己该做什么，岗位知道自己的标准，时段知道自己的重点，问题有人检查，结果有人复盘。优秀店长不是每天把自己忙死，而是让门店即使很忙，也有节奏。"}
+{"kind":"slide","id":"sl/el4bak","slide":8,"title":"第三项修炼","textShapes":10}
+{"kind":"textbox","id":"sh/z61032ls","slide":8,"text":"第三项修炼","textPreview":"第三项修炼","textChars":5,"textLines":1,"bbox":[54,42,600,26]}
+{"kind":"textbox","id":"sh/orytsvu9","slide":8,"text":"育人有方：店长最大的长期成绩，是团队成长","textPreview":"育人有方：店长最大的长期成绩，是团队成长","textChars":20,"textLines":1,"bbox":[54,75,850,70]}
+{"kind":"shape","id":"sh/hcrmhk3q","slide":8,"bbox":[54,150,100,4]}
+{"kind":"textbox","id":"sh/a9w3m94f","slide":8,"text":"麦家小馆店长训练营","textPreview":"麦家小馆店长训练营","textChars":9,"textLines":1,"bbox":[54,670,360,24]}
+{"kind":"textbox","id":"sh/zupwb2hw","slide":8,"text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[1170,670,56,24]}
+{"kind":"textbox","id":"sh/sfil0rqd","slide":8,"text":"只会自己干的店长，会把自己变成门店最大的瓶颈。","textPreview":"只会自己干的店长，会把自己变成门店最大的瓶颈。","textChars":23,"textLines":1,"bbox":[90,178,980,40]}
+{"kind":"shape","id":"sh/h0fepkzu","slide":8,"bbox":[90,255,455,230]}
+{"kind":"textbox","id":"sh/65wjudg7","slide":8,"text":"短期强","textPreview":"短期强","textChars":3,"textLines":1,"bbox":[130,290,360,36]}
+{"kind":"textbox","id":"sh/zqtcj6to","slide":8,"text":"哪里缺人就顶上\n谁不会做就自己做\n谁做得慢就直接接过来","textPreview":"哪里缺人就顶上 | 谁不会做就自己做 | 谁做得慢就直接接过来","textChars":27,"textLines":3,"bbox":[130,350,360,96]}
+{"kind":"shape","id":"sh/zupwb2hw","slide":8,"bbox":[630,255,455,230]}
+{"kind":"textbox","id":"sh/a9w3m94f","slide":8,"text":"长期强","textPreview":"长期强","textChars":3,"textLines":1,"bbox":[670,290,360,36]}
+{"kind":"textbox","id":"sh/h0fepkzu","slide":8,"text":"新人有人教\n骨干被看见\n值班经理被训练\n团队能离开店长运转","textPreview":"新人有人教 | 骨干被看见 | 值班经理被训练 | 团队能离开店长运转","textChars":29,"textLines":4,"bbox":[670,350,360,116]}
+{"kind":"textbox","id":"sh/sfil0rqd","slide":8,"text":"真正优秀的店长，不是自己一个人强，而是能让一群人变强。","textPreview":"真正优秀的店长，不是自己一个人强，而是能让一群人变强。","textChars":27,"textLines":1,"bbox":[90,540,1030,40]}
+{"kind":"notes","id":"nt/el4bak","slide":8,"text":"第三项修炼，育人有方。我希望所有店长记住一句话：员工成长，是店长最大的长期成绩。很多店长很能干，哪里缺人他顶上去，谁不会做他自己做，谁做得慢他接过来。短期看很厉害，长期看很危险，因为他把自己变成了门店最大的瓶颈。他在，门店能运转；他不在，门店就乱。真正优秀的店长，不是自己一个人强，而是能让一群人变强。"}
+{"kind":"slide","id":"sl/rd1x3z","slide":9,"title":"第四项修炼","textShapes":12}
+{"kind":"textbox","id":"sh/gfmlkjm1","slide":9,"text":"第四项修炼","textPreview":"第四项修炼","textChars":5,"textLines":1,"bbox":[54,42,600,26]}
+{"kind":"textbox","id":"sh/rytsvu9k","slide":9,"text":"处事有度：懂人情，但不失原则","textPreview":"处事有度：懂人情，但不失原则","textChars":14,"textLines":1,"bbox":[54,75,850,70]}
+{"kind":"shape","id":"sh/yd0z6103","slide":9,"bbox":[54,150,100,4]}
+{"kind":"textbox","id":"sh/9s36hcrm","slide":9,"text":"麦家小馆店长训练营","textPreview":"麦家小馆店长训练营","textChars":9,"textLines":1,"bbox":[54,670,360,24]}
+{"kind":"textbox","id":"sh/g7adsji5","slide":9,"text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[1170,670,56,24]}
+{"kind":"textbox","id":"sh/rmhk3q5o","slide":9,"text":"餐饮行业，本质上是和人打交道。","textPreview":"餐饮行业，本质上是和人打交道。","textChars":15,"textLines":1,"bbox":[90,174,900,40]}
+{"kind":"textbox","id":"sh/y1kre1w7","slide":9,"text":"员工有情绪","textPreview":"员工有情绪","textChars":5,"textLines":1,"bbox":[100,265,160,38]}
+{"kind":"shape","id":"sh/5o7qpg3e","slide":9,"bbox":[125,317,110,2]}
+{"kind":"textbox","id":"sh/g3ex0nux","slide":9,"text":"顾客有情绪","textPreview":"顾客有情绪","textChars":5,"textLines":1,"bbox":[315,265,160,38]}
+{"kind":"shape","id":"sh/m94fu18j","slide":9,"bbox":[340,317,110,2]}
+{"kind":"textbox","id":"sh/fu18jqh0","slide":9,"text":"商场有关系","textPreview":"商场有关系","textChars":5,"textLines":1,"bbox":[530,265,160,38]}
+{"kind":"shape","id":"sh/4fu18jqh","slide":9,"bbox":[555,317,110,4]}
+{"kind":"textbox","id":"sh/x0nuxc3y","slide":9,"text":"供应商有合作","textPreview":"供应商有合作","textChars":6,"textLines":1,"bbox":[745,265,160,38]}
+{"kind":"shape","id":"sh/qxs72x4n","slide":9,"bbox":[770,317,110,2]}
+{"kind":"textbox","id":"sh/fil0rqd4","slide":9,"text":"平台有规则","textPreview":"平台有规则","textChars":5,"textLines":1,"bbox":[960,265,160,38]}
+{"kind":"shape","id":"sh/83itgfml","slide":9,"bbox":[985,317,110,2]}
+{"kind":"shape","id":"sh/xobm58z2","slide":9,"bbox":[150,395,880,100]}
+{"kind":"textbox","id":"sh/mtwra5gb","slide":9,"text":"真正的江湖智慧：有温度，但不失标准。","textPreview":"真正的江湖智慧：有温度，但不失标准。","textChars":18,"textLines":1,"bbox":[185,425,810,38]}
+{"kind":"textbox","id":"sh/fepkzupw","slide":9,"text":"通人性，知理性。知道什么时候安抚，也知道什么时候坚持。","textPreview":"通人性，知理性。知道什么时候安抚，也知道什么时候坚持。","textChars":27,"textLines":1,"bbox":[155,545,900,40]}
+{"kind":"notes","id":"nt/rd1x3z","slide":9,"text":"第四项修炼，处事有度。一个优秀店长，要有一点江湖气。但这里说的江湖气，不是讲义气、拉关系、没有原则。真正的江湖气，是懂人情，但不失原则；有温度，但不失标准。餐饮行业本质上是和人打交道。员工有情绪，顾客有情绪，商场有关系，供应商有合作，平台有规则。店长不能只有制度，也不能只有人情。处事有度，就是知道什么时候讲情，什么时候立规矩；什么时候安抚，什么时候坚持。"}
+{"kind":"slide","id":"sl/sfjb3q","slide":10,"title":"第五项修炼","textShapes":10}
+{"kind":"textbox","id":"sh/xs72x4na","slide":10,"text":"第五项修炼","textPreview":"第五项修炼","textChars":5,"textLines":1,"bbox":[54,42,600,26]}
+{"kind":"textbox","id":"sh/q1orytsv","slide":10,"text":"担当有魂：店长决定一家店的气质","textPreview":"担当有魂：店长决定一家店的气质","textChars":15,"textLines":1,"bbox":[54,75,850,70]}
+{"kind":"shape","id":"sh/fmlkjm1c","slide":10,"bbox":[54,150,100,4]}
+{"kind":"textbox","id":"sh/8z25kb6x","slide":10,"text":"麦家小馆店长训练营","textPreview":"麦家小馆店长训练营","textChars":9,"textLines":1,"bbox":[54,670,360,24]}
+{"kind":"textbox","id":"sh/1gvy90je","slide":10,"text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[1170,670,56,24]}
+{"kind":"textbox","id":"sh/qtcj6tov","slide":10,"text":"顾客看到店长，看到的是麦家小馆。\n员工看到店长，看到的是企业文化。","textPreview":"顾客看到店长，看到的是麦家小馆。 | 员工看到店长，看到的是企业文化。","textChars":33,"textLines":2,"bbox":[90,178,900,85]}
+{"kind":"shape","id":"sh/je9cvixc","slide":10,"bbox":[90,320,480,170]}
+{"kind":"textbox","id":"sh/8v6psfil","slide":10,"text":"有担当的店","textPreview":"有担当的店","textChars":5,"textLines":1,"bbox":[125,352,390,36]}
+{"kind":"textbox","id":"sh/xczed8v6","slide":10,"text":"员工眼里有活\n服务有热情\n问题有人管\n顾客被重视","textPreview":"员工眼里有活 | 服务有热情 | 问题有人管 | 顾客被重视","textChars":24,"textLines":4,"bbox":[125,410,360,70]}
+{"kind":"shape","id":"sh/donyd0z6","slide":10,"bbox":[660,320,480,170]}
+{"kind":"textbox","id":"sh/k3q5o7qp","slide":10,"text":"没有担当的店","textPreview":"没有担当的店","textChars":6,"textLines":1,"bbox":[695,352,390,36]}
+{"kind":"textbox","id":"sh/vixczed8","slide":10,"text":"员工各干各的\n标准没人守\n问题找理由\n顾客被冷落","textPreview":"员工各干各的 | 标准没人守 | 问题找理由 | 顾客被冷落","textChars":24,"textLines":4,"bbox":[695,410,360,70]}
+{"kind":"textbox","id":"sh/2x4nap4r","slide":10,"text":"担当有魂，就是心里有一根柱子：责任、标准、使命。","textPreview":"担当有魂，就是心里有一根柱子：责任、标准、使命。","textChars":24,"textLines":1,"bbox":[90,550,1000,38]}
+{"kind":"notes","id":"nt/sfjb3q","slide":10,"text":"第五项修炼，担当有魂。店长不是一个普通岗位，店长是门店的第一责任人。顾客看到店长，看到的就是麦家小馆；员工看到店长，看到的就是企业文化。店长决定一家店的气质。有的店一进去就有精神，员工眼里有活，服务有热情，问题有人管，这背后一定有一个有担当的店长。担当有魂，就是店长心里有一根柱子：责任、标准、使命。"}
+{"kind":"slide","id":"sl/pl6bds","slide":11,"title":"模型关系","textShapes":9}
+{"kind":"textbox","id":"sh/hwfyxobm","slide":11,"text":"模型关系","textPreview":"模型关系","textChars":4,"textLines":1,"bbox":[54,42,600,26]}
+{"kind":"textbox","id":"sh/65wjudg7","slide":11,"text":"五项修炼解决“成为谁”，BMGS 解决“怎么干”","textPreview":"五项修炼解决“成为谁”，BMGS 解决“怎么干”","textChars":24,"textLines":1,"bbox":[54,75,850,70]}
+{"kind":"shape","id":"sh/zqtcj6to","slide":11,"bbox":[54,150,100,4]}
+{"kind":"textbox","id":"sh/oza1gvy9","slide":11,"text":"麦家小馆店长训练营","textPreview":"麦家小馆店长训练营","textChars":9,"textLines":1,"bbox":[54,670,360,24]}
+{"kind":"textbox","id":"sh/hk3q5o7q","slide":11,"text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[1170,670,56,24]}
+{"kind":"shape","id":"sh/6xkf6dcb","slide":11,"bbox":[90,220,460,250]}
+{"kind":"textbox","id":"sh/zed8v6ps","slide":11,"text":"五项修炼","textPreview":"五项修炼","textChars":4,"textLines":1,"bbox":[130,255,380,38]}
+{"kind":"textbox","id":"sh/orytsvu9","slide":11,"text":"店长的人格框架\n决定他如何理解责任、团队、顾客和品牌","textPreview":"店长的人格框架 | 决定他如何理解责任、团队、顾客和品牌","textChars":26,"textLines":2,"bbox":[130,330,360,88]}
+{"kind":"shape","id":"sh/hcrmhk3q","slide":11,"bbox":[680,220,460,250]}
+{"kind":"textbox","id":"sh/d4vmtwra","slide":11,"text":"BMGS","textPreview":"BMGS","textChars":4,"textLines":1,"bbox":[720,255,380,38]}
+{"kind":"textbox","id":"sh/oj2t83it","slide":11,"text":"店长的做事框架\n帮助他把经营、管理、成长和服务落成动作","textPreview":"店长的做事框架 | 帮助他把经营、管理、成长和服务落成动作","textChars":27,"textLines":2,"bbox":[720,330,360,88]}
+{"kind":"textbox","id":"sh/vy90je9c","slide":11,"text":"两者合在一起，构成麦家小馆店长训练营的底层哲学。","textPreview":"两者合在一起，构成麦家小馆店长训练营的底层哲学。","textChars":24,"textLines":1,"bbox":[130,545,960,40]}
+{"kind":"notes","id":"nt/pl6bds","slide":11,"text":"这里要把模型关系讲清楚。五项修炼和 BMGS 不是替代关系，而是互补关系。BMGS 解决店长怎么干，五项修炼解决店长成为什么样的人。简单说，BMGS 是做事的角色框架，五项修炼是成为谁的人格框架。两者合在一起，构成麦家小馆店长训练营的底层哲学。"}
+{"kind":"slide","id":"sl/yn23x0","slide":12,"title":"金句沉淀","textShapes":9}
+{"kind":"textbox","id":"sh/qh0fepkz","slide":12,"text":"金句沉淀","textPreview":"金句沉淀","textChars":4,"textLines":1,"bbox":[54,42,600,26]}
+{"kind":"textbox","id":"sh/18jqh0fe","slide":12,"text":"麦家小馆店长行为准则","textPreview":"麦家小馆店长行为准则","textChars":10,"textLines":1,"bbox":[54,75,850,70]}
+{"kind":"shape","id":"sh/8nqxs72x","slide":12,"bbox":[54,150,100,4]}
+{"kind":"textbox","id":"sh/jqh0fepk","slide":12,"text":"麦家小馆店长训练营","textPreview":"麦家小馆店长训练营","textChars":9,"textLines":1,"bbox":[54,670,360,24]}
+{"kind":"textbox","id":"sh/q5o7qpg3","slide":12,"text":"12","textPreview":"12","textChars":2,"textLines":1,"bbox":[1170,670,56,24]}
+{"kind":"textbox","id":"sh/1w7mp0bi","slide":12,"text":"通人性，而不失原则；","textPreview":"通人性，而不失原则；","textChars":10,"textLines":1,"bbox":[120,195,900,45]}
+{"kind":"textbox","id":"sh/8bat47y1","slide":12,"text":"知理性，而不失温度；","textPreview":"知理性，而不失温度；","textChars":10,"textLines":1,"bbox":[120,270,900,45]}
+{"kind":"textbox","id":"sh/ji5snelo","slide":12,"text":"守制度，而不失灵活；","textPreview":"守制度，而不失灵活；","textChars":10,"textLines":1,"bbox":[120,345,900,45]}
+{"kind":"textbox","id":"sh/uxc3ylc7","slide":12,"text":"讲结果，而不失成长。","textPreview":"讲结果，而不失成长。","textChars":10,"textLines":1,"bbox":[120,420,900,45]}
+{"kind":"shape","id":"sh/gn29gr2p","slide":12,"bbox":[120,515,780,1]}
+{"kind":"textbox","id":"sh/58z25kb6","slide":12,"text":"这句话不是用来背的，而是用来处理复杂问题时校准自己的。","textPreview":"这句话不是用来背的，而是用来处理复杂问题时校准自己的。","textChars":27,"textLines":1,"bbox":[120,545,880,38]}
+{"kind":"notes","id":"nt/yn23x0","slide":12,"text":"这一页可以带大家一起读。通人性，而不失原则；知理性，而不失温度；守制度，而不失灵活；讲结果，而不失成长。这句话不是口号，而是店长处理复杂问题时的校准器。遇到员工情绪，先通人性；遇到制度底线，不能失原则；遇到结果压力，要讲结果；但讲结果的同时，也不能忘了团队成长。"}
+{"kind":"slide","id":"sl/dn85sk","slide":13,"title":"课堂练习","textShapes":14}
+{"kind":"textbox","id":"sh/fmlkjm1c","slide":13,"text":"课堂练习","textPreview":"课堂练习","textChars":4,"textLines":1,"bbox":[54,42,600,26]}
+{"kind":"textbox","id":"sh/87ed8bat","slide":13,"text":"把五项修炼变成自我检查","textPreview":"把五项修炼变成自我检查","textChars":11,"textLines":1,"bbox":[54,75,850,70]}
+{"kind":"shape","id":"sh/xs72x4na","slide":13,"bbox":[54,150,100,4]}
+{"kind":"textbox","id":"sh/qtcj6tov","slide":13,"text":"麦家小馆店长训练营","textPreview":"麦家小馆店长训练营","textChars":9,"textLines":1,"bbox":[54,670,360,24]}
+{"kind":"textbox","id":"sh/je9cvixc","slide":13,"text":"13","textPreview":"13","textChars":2,"textLines":1,"bbox":[1170,670,56,24]}
+{"kind":"textbox","id":"sh/8z25kb6x","slide":13,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[95,185,55,30]}
+{"kind":"textbox","id":"sh/1gvy90je","slide":13,"text":"我今天有没有真正看懂营业额背后的原因？","textPreview":"我今天有没有真正看懂营业额背后的原因？","textChars":19,"textLines":1,"bbox":[160,180,930,38]}
+{"kind":"shape","id":"sh/qpg3ex0n","slide":13,"bbox":[160,229,830,1]}
+{"kind":"textbox","id":"sh/fa9w3m94","slide":13,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[95,257,55,30]}
+{"kind":"textbox","id":"sh/je9cvixc","slide":13,"text":"我的门店是否靠流程运转，而不是靠我临时救火？","textPreview":"我的门店是否靠流程运转，而不是靠我临时救火？","textChars":22,"textLines":1,"bbox":[160,252,930,38]}
+{"kind":"shape","id":"sh/qtcj6tov","slide":13,"bbox":[160,301,830,1]}
+{"kind":"textbox","id":"sh/1gvy90je","slide":13,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[95,329,55,30]}
+{"kind":"textbox","id":"sh/8z25kb6x","slide":13,"text":"我今天有没有教会一个人，发现一个人，培养一个人？","textPreview":"我今天有没有教会一个人，发现一个人，培养一个人？","textChars":24,"textLines":1,"bbox":[160,324,930,38]}
+{"kind":"shape","id":"sh/fmlkjm1c","slide":13,"bbox":[160,373,830,1]}
+{"kind":"textbox","id":"sh/q1orytsv","slide":13,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[95,401,55,30]}
+{"kind":"textbox","id":"sh/xs72x4na","slide":13,"text":"我处理问题时，是只有制度，还是既有温度也有原则？","textPreview":"我处理问题时，是只有制度，还是既有温度也有原则？","textChars":24,"textLines":1,"bbox":[160,396,930,38]}
+{"kind":"shape","id":"sh/87ed8bat","slide":13,"bbox":[160,445,830,1]}
+{"kind":"textbox","id":"sh/fyxobm58","slide":13,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[95,473,55,30]}
+{"kind":"textbox","id":"sh/qd4vmtwr","slide":13,"text":"顾客和员工能不能从我身上看到麦家小馆的标准？","textPreview":"顾客和员工能不能从我身上看到麦家小馆的标准？","textChars":22,"textLines":1,"bbox":[160,468,930,38]}
+{"kind":"shape","id":"sh/yhgn29gr","slide":13,"bbox":[160,517,830,1]}
+{"kind":"notes","id":"nt/dn85sk","slide":13,"text":"这一页可以做一个小互动。请每位店长在心里给自己打分，不用写给别人看。第一，我今天有没有真正看懂营业额背后的原因？第二，我的门店是否靠流程运转，而不是靠我临时救火？第三，我今天有没有教会一个人、发现一个人、培养一个人？第四，我处理问题时，是只有制度，还是既有温度也有原则？第五，顾客和员工能不能从我身上看到麦家小馆的标准？"}
+{"kind":"slide","id":"sl/j1kjka","slide":14,"title":"课程收束","textShapes":6}
+{"kind":"textbox","id":"sh/a5gbq1or","slide":14,"text":"课程收束","textPreview":"课程收束","textChars":4,"textLines":1,"bbox":[54,42,600,26]}
+{"kind":"textbox","id":"sh/lszqtcj6","slide":14,"text":"从今天开始，学习成为一个值得托付的店长","textPreview":"从今天开始，学习成为一个值得托付的店长","textChars":19,"textLines":1,"bbox":[54,75,850,70]}
+{"kind":"shape","id":"sh/s72x4nap","slide":14,"bbox":[54,150,100,4]}
+{"kind":"textbox","id":"sh/3ylc7u54","slide":14,"text":"麦家小馆店长训练营","textPreview":"麦家小馆店长训练营","textChars":9,"textLines":1,"bbox":[54,670,360,24]}
+{"kind":"textbox","id":"sh/adsji5sn","slide":14,"text":"14","textPreview":"14","textChars":2,"textLines":1,"bbox":[1170,670,56,24]}
+{"kind":"shape","id":"sh/h4byhgn2","slide":14,"bbox":[90,205,980,210]}
+{"kind":"textbox","id":"sh/sji5snel","slide":14,"text":"优秀的店长，既要懂经营，也要懂人情；\n既要守规则，也要通人性；\n既要有制度，也要有温度；\n既要讲结果，也要带人成长。","textPreview":"优秀的店长，既要懂经营，也要懂人情； | 既要守规则，也要通人性； | 既要有制度，也要有温度； | 既要讲结果，也要带人成长。","textChars":58,"textLines":4,"bbox":[135,245,890,130]}
+{"kind":"textbox","id":"sh/za1gvy90","slide":14,"text":"我们不只是学习怎么当店长。\n我们要学习，怎样成为一个真正被团队信任、被顾客认可、被公司托付的店长。","textPreview":"我们不只是学习怎么当店长。 | 我们要学习，怎样成为一个真正被团队信任、被顾客认可、被公司托付的店长。","textChars":49,"textLines":2,"bbox":[110,500,960,76]}
+{"kind":"notes","id":"nt/j1kjka","slide":14,"text":"今天我们讲了店长的五项修炼：经营有道、管理有序、育人有方、处事有度、担当有魂。麦家小馆需要的，不只是会排班的店长，不只是会管人的店长，也不只是会完成营业额的店长。我们需要的是一个真正能承担门店的人。最后送给大家一句话：优秀的店长，既要懂经营，也要懂人情；既要守规则，也要通人性；既要有制度，也要有温度；既要讲结果，也要带人成长。从今天开始，我们不只是学习怎么当店长，我们要学习怎样成为一个真正值得被团队信任、被顾客认可、被公司托付的店长。"}
