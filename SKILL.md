@@ -1,6 +1,6 @@
 ---
 name: maijia-business-analyse
-description: Fetch, profile, analyze, and report on Maijia Xiaoguan / Meituan POS business exports. Use when Codex needs to obtain Meituan 管家 自助营业取数 data, stream-process large 营业分组表 .xlsx files without loading the full workbook, generate reusable fact tables, derive restaurant operating insights, or produce a McKinsey-style HTML经营诊断报告 for store, channel, member, discount, and daypart analysis.
+description: Fetch, profile, analyze, and report on Maijia Xiaoguan / Meituan POS business exports. Use when Codex needs to obtain Meituan 管家 data, stream-process large .xlsx exports, generate reusable fact tables, diagnose restaurant growth and efficiency across store, weekday/weekend, channel, product, daypart, labor, customer, and unit-economics dimensions, create weekly/monthly/PPT/HTML经营报告, analyze complaint root causes, define SMART actions, or incorporate validated new operating-analysis knowledge into the skill.
 ---
 
 # Maijia Business Analyse
@@ -47,6 +47,7 @@ Use this skill to run the Maijia Xiaoguan operating-data workflow end to end:
 - `scripts/download_meituan_signed_url.py`: download an export from an already-authorized signed Meituan/Sankuai URL.
 - `references/meituan_export_workflow.zh.md`: read when the user asks to fetch or re-fetch data from Meituan 管家.
 - `references/report_style.zh.md`: read before drafting narrative conclusions or changing report structure.
+- `references/restaurant_operating_system.zh.md`: read before weekly/monthly operating diagnosis, complaint root-cause work, labor-efficiency analysis, or adding a new analytical dimension. It defines the six-layer metric tree, formulas, required views, SMART actions, and continuous-learning validation loop.
 - `analysis_blueprint.md`: detailed Chinese blueprint and metric dictionary from the original analysis work.
 
 ## Data Acquisition
@@ -287,7 +288,7 @@ Monthly meeting fact tables:
 
 ## Report Drafting
 
-Before writing or revising management conclusions, read `references/report_style.zh.md`.
+Before writing or revising management conclusions, read `references/report_style.zh.md` and `references/restaurant_operating_system.zh.md`.
 
 Use this default structure:
 
@@ -299,7 +300,25 @@ Use this default structure:
 6. Dish sales mix: current-period店内营业收入 by dish, Top 10 plus `其他`, with all-store and single-store views when dish input is available.
 7. Hourly revenue opportunities: 24-hour revenue bar chart, with a dropdown for all stores or each single store, and peak/off-peak actions.
 8. Daypart attribution: explain which `餐段 + 时段` combinations drive each store's biggest revenue gain/loss in 环比 and 同比.
-9. Opportunity pool: 30/60/90 day actions with evidence strength.
+9. People efficiency: revenue per attendance/hour and front-of-house guests served per attendance/hour by store and time slot when attendance data is available.
+10. Customer issues: merge similar complaints; analyze from phenomenon to data location, onsite evidence, management essence, corrective action, and 8—10 day validation. Do not mechanically display 5 Why.
+11. Opportunity pool: SMART actions with evidence strength, owner, target, deadline, and review date.
+
+Structure weekly reports as 总—分—总: all stores, each store, then cross-store priorities. Explicitly compare 周一至周四平常日 with 周五至周日周末. For dine-in and delivery, show both amount and quantity contribution Top 10, including amount share and quantity share, for all stores and each store when supported by data.
+
+Use the six-layer metric tree in `references/restaurant_operating_system.zh.md`. Never infer unit economics, customer recurrence, or onsite root cause from revenue data alone.
+
+## Continuous Learning
+
+When the user provides a new benchmark, management method, report, or operating lesson, map it to the existing six-layer metric tree before changing the skill. Follow the validation and versioning loop in `references/restaurant_operating_system.zh.md`:
+
+1. Record the source, scope, metric definition, and proposed decision use.
+2. Check for duplicate or conflicting definitions.
+3. Test the calculation on a historical sample and reconcile totals.
+4. Validate interpretations against onsite evidence where causality is claimed.
+5. Promote only validated rules into the standard report; preserve the former definition and effective date.
+
+Do not claim autonomous or permanent learning. Persist reusable learning only by updating this skill or its referenced files, and label unvalidated knowledge as a hypothesis.
 
 Use charts and compact UI over long prose. Keep conclusions short and tied to a metric.
 
@@ -330,3 +349,6 @@ Open the HTML report in a browser and check:
 - Hourly bar charts, trend charts, heatmaps, and tables do not overlap.
 - Tables are scrollable and sortable.
 - The report does not expose raw row-level data unnecessarily.
+- All-store totals reconcile to store details; channel totals and Top 10 shares use the documented denominator.
+- Facts, diagnoses, hypotheses, and actions are visibly distinguishable.
+- Every SMART action has an owner, measurable target, deadline, and validation window.
