@@ -714,7 +714,7 @@ HTML_TEMPLATE = r'''<!doctype html>
         </div>
       </div>
       <div class="panel full-row">
-        <div class="panel-head"><h3>业务收入同比 / 环比增长率</h3><span class="label">每店拆分业务收入、堂食、外卖；绿色=环比，蓝色=同比；正向右，负向左</span></div>
+        <div class="panel-head"><h3>业务收入同比 / 环比增长率</h3><span class="label">六色区分业务收入、堂食、外卖的环比/同比；正向右，负向左</span></div>
         <div class="chart" id="growthBar"></div>
       </div>
       <div class="panel full-row">
@@ -964,12 +964,12 @@ HTML_TEMPLATE = r'''<!doctype html>
       const el = document.getElementById('growthBar');
       const rows = stores.slice().sort((a,b)=>Number(b.wow_net_revenue_pct||0)-Number(a.wow_net_revenue_pct||0));
       const metrics = [
-        {field:'wow_net_revenue_pct', label:'业务收入环比', lane:'业务收入', color:colors.green, off:0},
-        {field:'yoy_net_revenue_pct', label:'业务收入同比', lane:'业务收入', color:colors.blue, off:12},
-        {field:'wow_dine_in_revenue_pct', label:'堂食环比', lane:'堂食', color:colors.green, off:30},
-        {field:'yoy_dine_in_revenue_pct', label:'堂食同比', lane:'堂食', color:colors.blue, off:42},
-        {field:'wow_delivery_revenue_pct', label:'外卖环比', lane:'外卖', color:colors.green, off:60},
-        {field:'yoy_delivery_revenue_pct', label:'外卖同比', lane:'外卖', color:colors.blue, off:72},
+        {field:'wow_net_revenue_pct', label:'业务收入环比', lane:'业务收入', color:'#006d77', off:0},
+        {field:'yoy_net_revenue_pct', label:'业务收入同比', lane:'业务收入', color:'#1d4ed8', off:12},
+        {field:'wow_dine_in_revenue_pct', label:'堂食环比', lane:'堂食', color:'#2e7d32', off:30},
+        {field:'yoy_dine_in_revenue_pct', label:'堂食同比', lane:'堂食', color:'#7c3aed', off:42},
+        {field:'wow_delivery_revenue_pct', label:'外卖环比', lane:'外卖', color:'#f59e0b', off:60},
+        {field:'yoy_delivery_revenue_pct', label:'外卖同比', lane:'外卖', color:'#dc2626', off:72},
       ];
       const w = 1120, rowH = 98, h = Math.max(520, rows.length * rowH + 112), left = 220, mid = 610, right = 120;
       const vals = rows.flatMap(r => metrics.map(metric => Number(r[metric.field] || 0)));
@@ -996,7 +996,7 @@ HTML_TEMPLATE = r'''<!doctype html>
           const v = Number(r[metric.field] || 0);
           const bw = Math.abs(v) / max * 320;
           const x = v >= 0 ? mid : mid - bw;
-          root.appendChild(svg('rect', {x, y:y+metric.off, width:bw, height:10, rx:2, fill:metric.color, opacity: metric.lane === '业务收入' ? 1 : .82}));
+          root.appendChild(svg('rect', {x, y:y+metric.off, width:bw, height:10, rx:2, fill:metric.color}));
           root.appendChild(svg('text', {x: v >= 0 ? x + bw + 7 : x - 7, y:y+metric.off+9, 'text-anchor': v >= 0 ? 'start':'end', 'font-size':'10', fill:'#657386'})).textContent = fmtPct(v);
         });
       });

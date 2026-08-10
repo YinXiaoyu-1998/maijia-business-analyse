@@ -160,8 +160,11 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
 
     def test_growth_chart_labels_business_revenue_and_splits_dine_in_delivery_growth(self) -> None:
         self.assertIn("业务收入同比 / 环比增长率", report.HTML_TEMPLATE)
+        self.assertIn("六色区分业务收入、堂食、外卖的环比/同比", report.HTML_TEMPLATE)
         for label in ["业务收入环比", "业务收入同比", "堂食环比", "堂食同比", "外卖环比", "外卖同比"]:
             self.assertIn(label, report.HTML_TEMPLATE)
+        for color in ["#006d77", "#1d4ed8", "#2e7d32", "#7c3aed", "#f59e0b", "#dc2626"]:
+            self.assertIn(color, report.HTML_TEMPLATE)
         for field in [
             "wow_net_revenue_pct",
             "yoy_net_revenue_pct",
