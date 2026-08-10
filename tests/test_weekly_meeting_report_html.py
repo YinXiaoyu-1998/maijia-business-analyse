@@ -351,6 +351,12 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
         self.assertIn("档口归因", report.HTML_TEMPLATE)
         self.assertIn("时段归因", report.HTML_TEMPLATE)
 
+    def test_template_does_not_hide_the_ninth_store_in_attribution_tables(self) -> None:
+        self.assertNotIn("(stall.drivers || []).slice(0, 8)", report.HTML_TEMPLATE)
+        self.assertNotIn("(stall.yoy_drivers || []).slice(0, 8)", report.HTML_TEMPLATE)
+        self.assertNotIn("(daypart.drivers || []).slice(0, 8)", report.HTML_TEMPLATE)
+        self.assertNotIn("(daypart.yoy_drivers || []).slice(0, 8)", report.HTML_TEMPLATE)
+
     def test_template_includes_dish_sales_mix_pie(self) -> None:
         self.assertIn("dishMixPie", report.HTML_TEMPLATE)
         self.assertIn("renderDishSalesMix", report.HTML_TEMPLATE)

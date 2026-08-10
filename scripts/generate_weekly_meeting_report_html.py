@@ -1500,8 +1500,8 @@ HTML_TEMPLATE = r'''<!doctype html>
         return;
       }
       const match = stall.match_summary || {};
-      const drivers = (stall.drivers || []).slice(0, 8);
-      const yoyDrivers = (stall.yoy_drivers || []).slice(0, 8);
+      const drivers = stall.drivers || [];
+      const yoyDrivers = stall.yoy_drivers || [];
       const basis = (stall.meta && stall.meta.basis) || '菜品主题数据“菜品收入” × 菜品库“基础分类”。';
       const coverage = (stall.meta && stall.meta.period_coverage) || {};
       const missing = ['current', 'previous', 'yoy']
@@ -1548,8 +1548,8 @@ HTML_TEMPLATE = r'''<!doctype html>
         root.innerHTML = '<div class="callout"><b>时段归因未启用：</b>缺少营业分组表“时段”维度或目标对比周期数据。</div>';
         return;
       }
-      const drivers = (daypart.drivers || []).slice(0, 8);
-      const yoyDrivers = (daypart.yoy_drivers || []).slice(0, 8);
+      const drivers = daypart.drivers || [];
+      const yoyDrivers = daypart.yoy_drivers || [];
       const basis = (daypart.meta && daypart.meta.basis) || '营业分组表“时段”字段。';
       const rowHtml = rows => rows.map(row => `<tr>
         <td>${cleanName(row['门店名称'])}</td>

@@ -447,6 +447,29 @@ def strip_channel_prefix(value: Any) -> str:
     return re.sub(r"^【[^】]{1,12}】", "", normalize_name(value))
 
 
+def strip_parenthetical_copy(value: Any) -> str:
+    text = strip_channel_prefix(value)
+    text = re.sub(r"\([^)]{1,80}\)", "", text)
+    return text.strip()
+
+
+def dish_match_keys(value: Any) -> list[str]:
+    keys = [
+        normalize_name(value),
+        strip_channel_prefix(value),
+        strip_parenthetical_copy(value),
+    ]
+    for key in list(keys):
+        for prefix in ["高品质"]:
+            if key.startswith(prefix) and len(key) > len(prefix) + 1:
+                keys.append(key[len(prefix):])
+    unique = []
+    for key in keys:
+        if key and key not in unique:
+            unique.append(key)
+    return unique
+
+
 def add_to_agg(agg: dict[str, Any], row: dict[str, str], row_date: date) -> None:
     agg["rows"] += 1
     agg["dates"].add(row_date)
@@ -703,8 +726,9 @@ def load_catalog(path: Path) -> dict[str, Any]:
             stall = row.get("基础分类", "") or "未分类"
             rows += 1
             stalls[stall] += 1
-            by_name[normalize_name(name)].add(stall)
-            by_clean_name[strip_channel_prefix(name)].add(stall)
+            for key in dish_match_keys(name):
+                by_name[key].add(stall)
+                by_clean_name[key].add(stall)
     return {
         "path": str(path),
         "title": title,
@@ -719,9 +743,11 @@ def load_catalog(path: Path) -> dict[str, Any]:
 
 
 def resolve_stall(dish_name: str, catalog: dict[str, Any]) -> tuple[str, str]:
-    candidates = catalog["by_name"].get(normalize_name(dish_name))
-    if not candidates:
-        candidates = catalog["by_clean_name"].get(strip_channel_prefix(dish_name))
+    candidates = None
+    for key in dish_match_keys(dish_name):
+        candidates = catalog["by_name"].get(key) or catalog["by_clean_name"].get(key)
+        if candidates:
+            break
     if not candidates:
         return "未匹配菜品库", "unmatched"
     if len(candidates) > 1:
