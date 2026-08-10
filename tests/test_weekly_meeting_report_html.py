@@ -158,6 +158,20 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
         self.assertNotIn('id="heatmap"', report.HTML_TEMPLATE)
         self.assertNotIn("renderHeatmap()", report.HTML_TEMPLATE)
 
+    def test_growth_chart_labels_business_revenue_and_splits_dine_in_delivery_growth(self) -> None:
+        self.assertIn("业务收入同比 / 环比增长率", report.HTML_TEMPLATE)
+        for label in ["业务收入环比", "业务收入同比", "堂食环比", "堂食同比", "外卖环比", "外卖同比"]:
+            self.assertIn(label, report.HTML_TEMPLATE)
+        for field in [
+            "wow_net_revenue_pct",
+            "yoy_net_revenue_pct",
+            "wow_dine_in_revenue_pct",
+            "yoy_dine_in_revenue_pct",
+            "wow_delivery_revenue_pct",
+            "yoy_delivery_revenue_pct",
+        ]:
+            self.assertIn(field, report.HTML_TEMPLATE)
+
     def test_payload_uses_daypart_attribution_instead_of_stall_attribution(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             input_dir = Path(tmp)

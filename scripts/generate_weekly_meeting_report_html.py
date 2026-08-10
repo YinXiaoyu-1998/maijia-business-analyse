@@ -714,7 +714,7 @@ HTML_TEMPLATE = r'''<!doctype html>
         </div>
       </div>
       <div class="panel full-row">
-        <div class="panel-head"><h3>同比 / 环比增长率</h3><span class="label">绿色=环比，蓝色=同比；正向右，负向左</span></div>
+        <div class="panel-head"><h3>业务收入同比 / 环比增长率</h3><span class="label">每店拆分业务收入、堂食、外卖；绿色=环比，蓝色=同比；正向右，负向左</span></div>
         <div class="chart" id="growthBar"></div>
       </div>
       <div class="panel full-row">
@@ -963,29 +963,41 @@ HTML_TEMPLATE = r'''<!doctype html>
     function renderGrowthBar() {
       const el = document.getElementById('growthBar');
       const rows = stores.slice().sort((a,b)=>Number(b.wow_net_revenue_pct||0)-Number(a.wow_net_revenue_pct||0));
-      const w = 1120, h = Math.max(450, rows.length * 54 + 102), left = 180, mid = 575, right = 120;
-      const vals = rows.flatMap(r => [Number(r.wow_net_revenue_pct||0), Number(r.yoy_net_revenue_pct||0)]);
+      const metrics = [
+        {field:'wow_net_revenue_pct', label:'业务收入环比', lane:'业务收入', color:colors.green, off:0},
+        {field:'yoy_net_revenue_pct', label:'业务收入同比', lane:'业务收入', color:colors.blue, off:12},
+        {field:'wow_dine_in_revenue_pct', label:'堂食环比', lane:'堂食', color:colors.green, off:30},
+        {field:'yoy_dine_in_revenue_pct', label:'堂食同比', lane:'堂食', color:colors.blue, off:42},
+        {field:'wow_delivery_revenue_pct', label:'外卖环比', lane:'外卖', color:colors.green, off:60},
+        {field:'yoy_delivery_revenue_pct', label:'外卖同比', lane:'外卖', color:colors.blue, off:72},
+      ];
+      const w = 1120, rowH = 98, h = Math.max(520, rows.length * rowH + 112), left = 220, mid = 610, right = 120;
+      const vals = rows.flatMap(r => metrics.map(metric => Number(r[metric.field] || 0)));
       const max = Math.max(...vals.map(v => Math.abs(v)), .01);
       const root = svg('svg', {viewBox:`0 0 ${w} ${h}`});
-      [[colors.green, '环比'], [colors.blue, '同比']].forEach(([color, label], index) => {
-        const x = left + index * 76;
-        root.appendChild(svg('rect', {x, y:18, width:12, height:12, rx:2, fill:color}));
-        root.appendChild(svg('text', {x:x+18, y:29, 'font-size':'12', fill:'#657386', 'font-weight':'700'})).textContent = label;
+      metrics.forEach((metric, index) => {
+        const x = left + (index % 3) * 160;
+        const y = 16 + Math.floor(index / 3) * 18;
+        root.appendChild(svg('rect', {x, y, width:12, height:12, rx:2, fill:metric.color}));
+        root.appendChild(svg('text', {x:x+18, y:y+11, 'font-size':'12', fill:'#657386', 'font-weight':'700'})).textContent = metric.label;
       });
       root.appendChild(svg('text', {x: w - right, y: 29, 'text-anchor':'end', 'font-size':'11', fill:'#657386'})).textContent = '0% 为中心线';
-      root.appendChild(svg('line', {x1: mid, y1: 46, x2: mid, y2: h - 26, stroke:'#d9e2ea'}));
+      root.appendChild(svg('line', {x1: mid, y1: 56, x2: mid, y2: h - 26, stroke:'#d9e2ea'}));
       rows.forEach((r, i) => {
-        const y = 64 + i * 54;
+        const y = 70 + i * rowH;
         if (i > 0) {
-          root.appendChild(svg('line', {x1: left, y1: y - 12, x2: w - right, y2: y - 12, stroke:'#d9e2ea', 'stroke-dasharray':'5 6'}));
+          root.appendChild(svg('line', {x1: left - 84, y1: y - 14, x2: w - right, y2: y - 14, stroke:'#d9e2ea', 'stroke-dasharray':'5 6'}));
         }
-        root.appendChild(svg('text', {x: left - 8, y: y + 15, 'text-anchor':'end', 'font-size':'12', fill:'#344054'})).textContent = cleanName(r['门店名称']);
-        [['wow_net_revenue_pct', colors.green, 0], ['yoy_net_revenue_pct', colors.blue, 23]].forEach(([field, color, off]) => {
-          const v = Number(r[field] || 0);
-          const bw = Math.abs(v) / max * 360;
+        root.appendChild(svg('text', {x: left - 92, y: y + 42, 'text-anchor':'end', 'font-size':'12', fill:'#344054', 'font-weight':'760'})).textContent = cleanName(r['门店名称']);
+        [['业务收入', 6], ['堂食', 36], ['外卖', 66]].forEach(([lane, laneY]) => {
+          root.appendChild(svg('text', {x: left - 12, y: y + Number(laneY) + 9, 'text-anchor':'end', 'font-size':'11', fill:'#657386'})).textContent = lane;
+        });
+        metrics.forEach(metric => {
+          const v = Number(r[metric.field] || 0);
+          const bw = Math.abs(v) / max * 320;
           const x = v >= 0 ? mid : mid - bw;
-          root.appendChild(svg('rect', {x, y:y+off, width:bw, height:16, rx:3, fill:color}));
-          root.appendChild(svg('text', {x: v >= 0 ? x + bw + 7 : x - 7, y:y+off+12, 'text-anchor': v >= 0 ? 'start':'end', 'font-size':'12', fill:'#657386'})).textContent = fmtPct(v);
+          root.appendChild(svg('rect', {x, y:y+metric.off, width:bw, height:10, rx:2, fill:metric.color, opacity: metric.lane === '业务收入' ? 1 : .82}));
+          root.appendChild(svg('text', {x: v >= 0 ? x + bw + 7 : x - 7, y:y+metric.off+9, 'text-anchor': v >= 0 ? 'start':'end', 'font-size':'10', fill:'#657386'})).textContent = fmtPct(v);
         });
       });
       el.innerHTML = '';
