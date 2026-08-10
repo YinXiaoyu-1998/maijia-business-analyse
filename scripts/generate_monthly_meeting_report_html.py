@@ -11,6 +11,7 @@ from typing import Any
 
 from generate_weekly_meeting_report_html import (
     HTML_TEMPLATE as WEEKLY_HTML_TEMPLATE,
+    REVENUE_BASIS_NOTE,
     aggregate_dayparts,
     attach_daypart_slots,
     build_dish_sales_mix_payload,
@@ -127,6 +128,7 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
             "company": company,
             "generated": date.today().isoformat(),
             **summary["meta"],
+            "revenue_basis": REVENUE_BASIS_NOTE,
         },
         "kpis": {
             "current_revenue": current_revenue,
