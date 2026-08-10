@@ -35,8 +35,8 @@ Use this skill to run the Maijia Xiaoguan operating-data workflow end to end:
 - `scripts/profile_business_data.py`: stream-read a Meituan `.xlsx` and create fact tables plus `analysis_summary.json`.
 - `scripts/generate_business_report_html.py`: render a self-contained HTML diagnosis report from the fact tables.
 - `scripts/run_pipeline.py`: execute profiling and HTML generation in one command.
-- `scripts/profile_weekly_meeting_data.py`: stream-read weekly meeting business inputs into comparison, channel, daypart, dish sales mix, and attribution fact tables.
-- `scripts/generate_weekly_meeting_report_html.py`: render the full weekly meeting HTML with trend, store-size-bucketed quadrant/ranking, channel, dish sales mix, driver, hourly revenue, and daypart attribution sections.
+- `scripts/profile_weekly_meeting_data.py`: stream-read weekly meeting business inputs into comparison, channel, daypart, dish sales mix, stall attribution, and daypart attribution fact tables.
+- `scripts/generate_weekly_meeting_report_html.py`: render the full weekly meeting HTML with trend, store-size-bucketed quadrant/ranking, channel, dish sales mix, driver, stall attribution, hourly revenue, and daypart attribution sections.
 - `scripts/run_weekly_meeting_report.py`: execute the weekly meeting profiling and full HTML generation in one command.
 - `scripts/profile_monthly_meeting_data.py`: stream-read monthly meeting business inputs into month-level comparison, 6-month trend, channel, daypart, dish sales mix, and attribution fact tables.
 - `scripts/generate_monthly_meeting_report_html.py`: render the full monthly meeting HTML with month-level trend, quadrant, channel, dish sales mix, driver, hourly revenue, and daypart attribution sections.
@@ -94,7 +94,7 @@ When the weekly or monthly meeting report should include the `销售额菜品比
 
 ## Daypart Attribution
 
-Weekly and monthly meeting reports use `营业分组表` daypart attribution instead of stall/dish attribution. The required dimension is the business-export field named `时段`; when `餐段` is also present, aggregate by `门店名称 -> 餐段 -> 时段`.
+Weekly and monthly meeting reports use `营业分组表` daypart attribution. The required dimension is the business-export field named `时段`; when `餐段` is also present, aggregate by `门店名称 -> 餐段 -> 时段`.
 
 Use the same comparison windows as the report:
 
@@ -109,6 +109,20 @@ For each store and each comparison basis, calculate the revenue delta after aggr
 - Negative slots are the largest revenue decreases; positive slots are the largest revenue increases.
 
 This attribution identifies when the revenue change occurred. It does not claim why the change happened. Do not describe dish, menu, kitchen, or stall causes unless a separate dish-level analysis is explicitly requested and supported by `自助菜品取数`.
+
+## Stall Attribution
+
+Weekly meeting reports can also show `档口归因` as an independent section alongside `时段归因` when both `--dish-input` and `--catalog` are provided.
+
+Use this exact口径:
+
+- Grouping: map `菜品主题数据.菜品名称` to the dish catalog's `总部菜品.基础分类`; display that基础分类 as `档口`.
+- Metric: aggregate `菜品主题数据.菜品收入` by `门店名称 + 档口`, then compare the report's 本周, 环比周, and 同比周.
+- Detail: for each store and comparison basis, show the largest negative档口, largest positive档口, and representative菜品 driving each side.
+- Data requirement: dish exports must cover the current week, previous comparison week, and YoY week for complete 环比/同比 stall attribution. The profiler can accept multiple `maijia_dishes_YYYYMMDD_YYYYMMDD.xlsx` files and skip out-of-scope ranges.
+- Caveat: stall attribution is a dish-income drilldown and may not reconcile exactly to `营业分组表.订单营业收入`; use it to locate category/product movement, not as a precise financial decomposition.
+
+Do not replace daypart attribution with stall attribution. They answer different questions: `时段归因` says when revenue moved; `档口归因` says which menu category and dishes moved.
 
 ## Dish Sales Mix
 
@@ -134,7 +148,8 @@ If overlapping business exports must be combined, remove or exclude only the dup
 
 If a raw `.xlsx` contains multiple worksheets with the same report title, such as `营业分组表-2` or `菜品主题数据-2`, keep the workbook intact and pass the file once. The weekly profiler should combine all matching worksheets in that file and still use filename/date overlap rules only between separate input files.
 
-Pass `--dish-input` when the weekly report should include the `销售额菜品比例` pie chart. The dish export should cover at least the current week. Do not pass `--catalog` for this module; the current weekly report uses daypart attribution from `营业分组表.时段` and does not generate档口归因.
+Pass `--dish-input` when the weekly report should include the `销售额菜品比例` pie chart. The dish export should cover at least the current week for that module.
+Pass `--catalog` together with `--dish-input` when the weekly report should also include `档口归因`. The catalog is not needed for `销售额菜品比例`, but it is required to map dishes back to基础分类/档口.
 
 ## Monthly Meeting Report Guardrail
 
@@ -175,13 +190,16 @@ python3 maijia-business-analyse/scripts/generate_business_report_html.py \
   --source-name maijia_business_YYYYMMDD_YYYYMMDD.xlsx
 ```
 
-For the weekly meeting report with daypart attribution, run:
+For the weekly meeting report with daypart attribution, dish sales mix, and optional stall attribution, run:
 
 ```bash
 python3 maijia-business-analyse/scripts/run_weekly_meeting_report.py \
   --input documents/raw_exports/maijia_business_CURRENT_TREND_START_CURRENT_END.xlsx \
           documents/raw_exports/maijia_business_YOY_TREND_START_YOY_END.xlsx \
   --dish-input documents/raw_exports/maijia_dishes_CURRENT_START_CURRENT_END.xlsx \
+               documents/raw_exports/maijia_dishes_PREVIOUS_START_PREVIOUS_END.xlsx \
+               documents/raw_exports/maijia_dishes_YOY_START_YOY_END.xlsx \
+  --catalog documents/raw_exports/maijia_dish_catalog_YYYYMMDD.xlsx \
   --output-dir documents/maijia_weekly_meeting_analysis \
   --report documents/maijia_weekly_meeting_analysis/maijia_weekly_meeting_report.html \
   --company 麦家小馆 \
@@ -193,7 +211,7 @@ python3 maijia-business-analyse/scripts/run_weekly_meeting_report.py \
   --yoy-end YYYY/MM/DD
 ```
 
-The weekly report always attempts daypart attribution from the business inputs. `--dish-input` enables the `销售额菜品比例` pie chart; `--catalog` is not needed and is ignored by the standard report logic.
+The weekly report always attempts daypart attribution from the business inputs. `--dish-input` enables the `销售额菜品比例` pie chart; `--dish-input` plus `--catalog` enables the separate `档口归因` section.
 
 The weekly profiler writes lightweight `[progress]` logs to stderr while it inspects inputs, scans each `.xlsx`, crosses row-count checkpoints, computes attribution, writes CSVs, and writes the final summary. These logs are intentionally separate from the final JSON printed to stdout.
 
@@ -265,6 +283,11 @@ Weekly meeting fact tables:
 - `weekly_store_daypart_metrics.csv` for the weekly report's store-selectable 24-hour revenue chart; the HTML aggregates this by `时段` only and does not display the `餐段` dimension.
 - `weekly_store_daypart_comparison.csv` for 本周 / 环比周 / 同比周 daypart revenue comparisons by `门店名称 + 餐段 + 时段`
 - `weekly_store_daypart_driver_summary.csv` for each store's largest negative and positive daypart drivers by 环比 and 同比
+- `weekly_store_stall_metrics.csv` when `--dish-input` and `--catalog` are provided; stores dish-income facts by `门店名称 + 档口`
+- `weekly_store_stall_comparison.csv` when stall attribution is enabled; compares 本周 / 环比周 / 同比周 by `门店名称 + 档口`
+- `weekly_store_stall_driver_summary.csv` when stall attribution is enabled; stores each store's largest negative and positive档口 by 环比 and 同比
+- `weekly_store_stall_dish_drivers.csv` when stall attribution is enabled; representative菜品 for each selected档口 driver
+- `dish_catalog_match_summary.csv` when stall attribution is enabled; catalog match rate, unmatched rows, ambiguous rows, and catalog size
 - `weekly_store_dish_sales_mix.csv` when `--dish-input` is provided; stores current-period dish收入 and店内营业收入 shares for `全体门店` and each store
 - `weekly_trend_comparison_metrics.csv`
 - `weekly_store_comparison.csv`
@@ -298,8 +321,9 @@ Use this default structure:
 5. Channel quality: dine-in, delivery, pickup, platforms, discount intensity.
 6. Dish sales mix: current-period店内营业收入 by dish, Top 10 plus `其他`, with all-store and single-store views when dish input is available.
 7. Hourly revenue opportunities: 24-hour revenue bar chart, with a dropdown for all stores or each single store, and peak/off-peak actions.
-8. Daypart attribution: explain which `餐段 + 时段` combinations drive each store's biggest revenue gain/loss in 环比 and 同比.
-9. Opportunity pool: 30/60/90 day actions with evidence strength.
+8. Stall attribution when enabled: explain which基础分类/档口 and representative菜品 drive each store's biggest dish-income gain/loss in 环比 and 同比.
+9. Daypart attribution: explain which `餐段 + 时段` combinations drive each store's biggest revenue gain/loss in 环比 and 同比.
+10. Opportunity pool: 30/60/90 day actions with evidence strength.
 
 Use charts and compact UI over long prose. Keep conclusions short and tied to a metric.
 
