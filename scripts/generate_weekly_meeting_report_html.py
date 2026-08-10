@@ -338,6 +338,52 @@ def attach_daypart_slots(
     return enriched
 
 
+def compact_stall_drivers(rows: list[dict[str, Any]], basis: str = "环比") -> list[dict[str, Any]]:
+    filtered = [row for row in rows if row.get("basis") == basis]
+    filtered.sort(
+        key=lambda row: abs(float(row.get("top_negative_income_delta") or 0))
+        + abs(float(row.get("top_positive_income_delta") or 0)),
+        reverse=True,
+    )
+    return filtered
+
+
+def attach_dish_examples(
+    stall_drivers: list[dict[str, Any]],
+    dish_drivers: list[dict[str, Any]],
+    basis: str = "环比",
+    limit: int = 3,
+) -> list[dict[str, Any]]:
+    by_key: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for row in dish_drivers:
+        if row.get("basis") != basis:
+            continue
+        key = (
+            str(row.get("门店名称") or ""),
+            str(row.get("direction") or ""),
+            str(row.get("档口") or ""),
+        )
+        by_key.setdefault(key, []).append(row)
+
+    enriched = []
+    for row in stall_drivers:
+        item = dict(row)
+        neg_key = (
+            str(row.get("门店名称") or ""),
+            "negative",
+            str(row.get("top_negative_stall") or ""),
+        )
+        pos_key = (
+            str(row.get("门店名称") or ""),
+            "positive",
+            str(row.get("top_positive_stall") or ""),
+        )
+        item["negative_dishes"] = by_key.get(neg_key, [])[:limit]
+        item["positive_dishes"] = by_key.get(pos_key, [])[:limit]
+        enriched.append(item)
+    return enriched
+
+
 def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
     summary = json.loads((input_dir / "weekly_meeting_summary.json").read_text(encoding="utf-8"))
     comparison = read_csv(input_dir / "weekly_store_comparison.csv")
@@ -350,6 +396,10 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
     trend_comparison = read_csv(trend_comparison_path) if trend_comparison_path.exists() else []
     daypart_comparison = read_optional_csv(input_dir / "weekly_store_daypart_comparison.csv")
     daypart_drivers = read_optional_csv(input_dir / "weekly_store_daypart_driver_summary.csv")
+    stall_comparison = read_optional_csv(input_dir / "weekly_store_stall_comparison.csv")
+    stall_drivers = read_optional_csv(input_dir / "weekly_store_stall_driver_summary.csv")
+    dish_drivers = read_optional_csv(input_dir / "weekly_store_stall_dish_drivers.csv")
+    match_summary = metric_lookup(read_optional_csv(input_dir / "dish_catalog_match_summary.csv"))
     dish_sales_mix = read_optional_csv(input_dir / "weekly_store_dish_sales_mix.csv")
 
     segment_by_store = {row["门店名称"]: row for row in segments}
@@ -362,6 +412,7 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
         segment = segment_by_store.get(row["门店名称"], {})
         driver = driver_by_store.get(row["门店名称"], {})
         daypart_driver = next((item for item in daypart_drivers if item.get("门店名称") == row["门店名称"] and item.get("basis") == "环比"), {})
+        stall_driver = next((item for item in stall_drivers if item.get("门店名称") == row["门店名称"] and item.get("basis") == "环比"), {})
         row["segment"] = segment.get("segment", "未分型")
         row["store_size"] = segment.get("store_size", "未分组")
         row["revenue_threshold"] = segment.get("revenue_threshold")
@@ -369,6 +420,7 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
         row["segment_reason"] = segment.get("reason", "")
         row["top_negative_factor"] = driver.get("top_negative_factor", "")
         row["top_daypart_signal"] = daypart_driver.get("daypart_signal", "")
+        row["top_stall_signal"] = stall_driver.get("stall_signal", "")
         row["wow_order_volume_contribution"] = driver.get("order_volume_contribution")
         row["wow_aov_contribution"] = driver.get("aov_contribution")
         row["wow_dine_in_delta"] = driver.get("dine_in_delta")
@@ -476,6 +528,14 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
             "comparison": daypart_comparison,
             "drivers": attach_daypart_slots(compact_daypart_drivers(daypart_drivers, "环比"), daypart_comparison, "环比"),
             "yoy_drivers": attach_daypart_slots(compact_daypart_drivers(daypart_drivers, "同比"), daypart_comparison, "同比"),
+        },
+        "stall_attribution": {
+            "enabled": bool(summary["meta"].get("stall_attribution", {}).get("enabled")) and bool(stall_drivers),
+            "meta": summary["meta"].get("stall_attribution", {}),
+            "comparison": stall_comparison,
+            "drivers": attach_dish_examples(compact_stall_drivers(stall_drivers, "环比"), dish_drivers, "环比"),
+            "yoy_drivers": attach_dish_examples(compact_stall_drivers(stall_drivers, "同比"), dish_drivers, "同比"),
+            "match_summary": match_summary,
         },
         "data_gaps": summary.get("data_gaps", []),
     }
@@ -668,6 +728,7 @@ HTML_TEMPLATE = r'''<!doctype html>
         <a href="#channels">堂食外卖</a>
         <a href="#dish-mix">菜品比例</a>
         <a href="#drivers">归因</a>
+        <a href="#stall-drivers">档口归因</a>
         <a href="#daypart-drivers">时段归因</a>
         <a href="#dayparts">时段收入</a>
       </nav>
@@ -746,6 +807,7 @@ HTML_TEMPLATE = r'''<!doctype html>
             <th data-key="current_consumed_tables">开台/桌数</th>
             <th data-key="current_post_discount_aov">客单价</th>
             <th data-key="current_discount_rate">折扣率</th>
+            <th data-key="top_stall_signal">主要档口信号</th>
             <th data-key="top_daypart_signal">主要时段信号</th>
             <th data-key="top_negative_factor">主要提示</th>
           </tr></thead>
@@ -809,9 +871,17 @@ HTML_TEMPLATE = r'''<!doctype html>
       </div>
     </section>
 
+    <section class="section" id="stall-drivers">
+      <div class="section-head">
+        <div><div class="kicker">07 Stall Attribution</div><h2>档口归因：把门店变化穿透到基础分类和代表菜品</h2></div>
+        <p class="note">档口 = 菜品库「总部菜品.基础分类」。菜品表无稳定编码时使用菜品名称匹配，未匹配项单独归类。</p>
+      </div>
+      <div id="stallAttribution"></div>
+    </section>
+
     <section class="section" id="daypart-drivers">
       <div class="section-head">
-        <div><div class="kicker">07 Daypart Attribution</div><h2>时段归因：看门店增长和下滑发生在哪些时段</h2></div>
+        <div><div class="kicker">08 Daypart Attribution</div><h2>时段归因：看门店增长和下滑发生在哪些时段</h2></div>
         <p class="note">按门店、餐段、时段汇总订单营业收入，分别比较环比和同比变化；用于定位复盘方向。</p>
       </div>
       <div id="daypartAttribution"></div>
@@ -819,7 +889,7 @@ HTML_TEMPLATE = r'''<!doctype html>
 
     <section class="section" id="dayparts">
       <div class="section-head">
-        <div><div class="kicker">08 Hourly Revenue</div><h2>时段收入：看全天高峰，也看单店节奏</h2></div>
+        <div><div class="kicker">09 Hourly Revenue</div><h2>时段收入：看全天高峰，也看单店节奏</h2></div>
       </div>
       <div class="panel">
         <div class="panel-head">
@@ -1380,6 +1450,7 @@ HTML_TEMPLATE = r'''<!doctype html>
         <td>${fmtNum(r.current_consumed_tables)}</td>
         <td>${fmtYuan(r.current_post_discount_aov)}</td>
         <td>${fmtPct(r.current_discount_rate)}</td>
+        <td>${r.top_stall_signal || ''}</td>
         <td>${r.top_daypart_signal || ''}</td>
         <td>${r.top_negative_factor || r.segment_reason || ''}</td>
       </tr>`).join('');
@@ -1416,6 +1487,55 @@ HTML_TEMPLATE = r'''<!doctype html>
       if (!Number.isFinite(value)) return 'N/A';
       const sign = value > 0 ? '+' : '';
       return `${sign}${fmtWan(value)}`;
+    }
+    function dishList(rows) {
+      if (!rows || !rows.length) return '<span class="label">暂无代表菜品</span>';
+      return rows.map(row => `<span class="tag" style="margin:3px 4px 3px 0;">${row['菜品名称']} ${fmtDeltaWan(row.income_delta)}</span>`).join('');
+    }
+    function renderStallAttribution() {
+      const root = document.getElementById('stallAttribution');
+      const stall = data.stall_attribution || {};
+      if (!stall.enabled) {
+        root.innerHTML = '<div class="callout"><b>档口归因未启用：</b>需要同时提供自助菜品取数和菜品库基础信息。</div>';
+        return;
+      }
+      const match = stall.match_summary || {};
+      const drivers = (stall.drivers || []).slice(0, 8);
+      const yoyDrivers = (stall.yoy_drivers || []).slice(0, 8);
+      const basis = (stall.meta && stall.meta.basis) || '菜品主题数据“菜品收入” × 菜品库“基础分类”。';
+      const coverage = (stall.meta && stall.meta.period_coverage) || {};
+      const missing = ['current', 'previous', 'yoy']
+        .filter(key => !(coverage[key] && Number(coverage[key].rows || 0) > 0))
+        .map(key => coverage[key]?.label || key);
+      const coverageNote = missing.length
+        ? `<div class="callout" style="margin:0 0 16px;"><b>菜品主题数据缺少：</b>${missing.join('、')}，对应档口/菜品同比环比变化显示为 N/A。补齐本周、环比周、同比周后可生成完整拖动归因。</div>`
+        : '';
+      const rowHtml = rows => rows.map(row => `<tr>
+        <td>${cleanName(row['门店名称'])}</td>
+        <td>${row.basis}</td>
+        <td>${row.top_negative_stall || ''}</td>
+        <td>${fmtDeltaWan(row.top_negative_income_delta)}</td>
+        <td>${dishList(row.negative_dishes)}</td>
+        <td>${row.top_positive_stall || ''}</td>
+        <td>${fmtDeltaWan(row.top_positive_income_delta)}</td>
+        <td>${dishList(row.positive_dishes)}</td>
+      </tr>`).join('');
+      root.innerHTML = `
+        ${coverageNote}
+        <div class="grid-3">
+          <div class="card"><div class="label">菜品行匹配率</div><div class="value">${fmtPct(match.match_rate)}</div><div class="foot">未匹配 ${fmtNum(match.unmatched_rows)} / 重名 ${fmtNum(match.ambiguous_rows)}</div></div>
+          <div class="card"><div class="label">菜品库规模</div><div class="value">${fmtNum(match.catalog_rows)}</div><div class="foot">基础分类档口 ${fmtNum(match.catalog_stall_count)} 个</div></div>
+          <div class="card"><div class="label">归因口径</div><div class="value">环比 + 同比</div><div class="foot">按菜品收入变化排序</div></div>
+        </div>
+        <div class="callout" style="margin-top:16px;">${basis}</div>
+        <div class="panel full-row" style="margin-top:16px;">
+          <div class="panel-head"><h3>环比档口归因：门店主要变化</h3><span class="label">负向档口 / 正向档口 / 代表菜品</span></div>
+          <div class="table-wrap"><table><thead><tr><th>门店</th><th>口径</th><th>负向档口</th><th>负向变化</th><th>负向代表菜品</th><th>正向档口</th><th>正向变化</th><th>正向代表菜品</th></tr></thead><tbody>${rowHtml(drivers)}</tbody></table></div>
+        </div>
+        <div class="panel full-row" style="margin-top:16px;">
+          <div class="panel-head"><h3>同比档口归因</h3><span class="label">用于识别结构性改善或退化</span></div>
+          <div class="table-wrap"><table><thead><tr><th>门店</th><th>口径</th><th>负向档口</th><th>负向变化</th><th>负向代表菜品</th><th>正向档口</th><th>正向变化</th><th>正向代表菜品</th></tr></thead><tbody>${rowHtml(yoyDrivers)}</tbody></table></div>
+        </div>`;
     }
     function slotList(rows) {
       if (!rows || !rows.length) return '<span class="label">无明显变化</span>';
@@ -1537,6 +1657,7 @@ HTML_TEMPLATE = r'''<!doctype html>
     renderDishSalesMix();
     renderDriverBar();
     renderActions();
+    renderStallAttribution();
     renderDaypartAttribution();
     renderHourlySelector();
     renderHourlyRevenueBar();

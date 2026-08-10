@@ -175,7 +175,7 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
         ]:
             self.assertIn(field, report.HTML_TEMPLATE)
 
-    def test_payload_uses_daypart_attribution_instead_of_stall_attribution(self) -> None:
+    def test_payload_keeps_daypart_and_stall_attribution_independent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             input_dir = Path(tmp)
             (input_dir / "weekly_meeting_summary.json").write_text(
@@ -193,6 +193,7 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
                             "store_count": 1,
                             "outputs": [],
                             "daypart_attribution": {"enabled": True, "basis": "测试时段归因"},
+                            "stall_attribution": {"enabled": True, "basis": "测试档口归因"},
                         },
                         "data_gaps": [],
                     },
@@ -232,14 +233,49 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
                     {"门店名称": "麦家小馆（甲店）", "餐段": "晚餐", "时段": "18:00-19:00", "current_net_revenue": 180, "previous_net_revenue": 100, "wow_net_revenue_delta": 80},
                 ],
             )
+            write_csv(
+                input_dir / "weekly_store_stall_driver_summary.csv",
+                [
+                    {
+                        "门店名称": "麦家小馆（甲店）",
+                        "basis": "环比",
+                        "top_negative_stall": "热菜",
+                        "top_negative_income_delta": -70,
+                        "top_positive_stall": "饮品",
+                        "top_positive_income_delta": 30,
+                        "stall_signal": "热菜 -70 / 饮品 +30",
+                    }
+                ],
+            )
+            write_csv(
+                input_dir / "weekly_store_stall_dish_drivers.csv",
+                [
+                    {"门店名称": "麦家小馆（甲店）", "basis": "环比", "direction": "negative", "档口": "热菜", "菜品名称": "招牌牛肉", "income_delta": -40},
+                    {"门店名称": "麦家小馆（甲店）", "basis": "环比", "direction": "positive", "档口": "饮品", "菜品名称": "酸梅汤", "income_delta": 20},
+                ],
+            )
+            write_csv(input_dir / "weekly_store_stall_comparison.csv", [{"门店名称": "麦家小馆（甲店）", "档口": "热菜", "current_income": 80}])
+            write_csv(
+                input_dir / "dish_catalog_match_summary.csv",
+                [
+                    {"metric": "match_rate", "value": 0.9},
+                    {"metric": "unmatched_rows", "value": 1},
+                    {"metric": "ambiguous_rows", "value": 0},
+                    {"metric": "catalog_rows", "value": 100},
+                    {"metric": "catalog_stall_count", "value": 8},
+                ],
+            )
 
             payload = report.build_payload(input_dir, "麦家小馆")
 
         self.assertIn("daypart_attribution", payload)
-        self.assertNotIn("stall_attribution", payload)
+        self.assertIn("stall_attribution", payload)
         self.assertEqual(payload["comparison"][0]["top_daypart_signal"], "午餐 12:00-13:00 -50 / 晚餐 18:00-19:00 +80")
+        self.assertEqual(payload["comparison"][0]["top_stall_signal"], "热菜 -70 / 饮品 +30")
         self.assertEqual(payload["daypart_attribution"]["drivers"][0]["negative_slots"][0]["时段"], "12:00-13:00")
         self.assertEqual(payload["daypart_attribution"]["drivers"][0]["positive_slots"][0]["时段"], "18:00-19:00")
+        self.assertEqual(payload["stall_attribution"]["drivers"][0]["negative_dishes"][0]["菜品名称"], "招牌牛肉")
+        self.assertEqual(payload["stall_attribution"]["drivers"][0]["positive_dishes"][0]["菜品名称"], "酸梅汤")
 
     def test_trend_template_uses_standard_extrema_palette_and_comparison_dash(self) -> None:
         self.assertIn("colors.yellow", report.HTML_TEMPLATE)
@@ -305,12 +341,15 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
         self.assertAlmostEqual(mix["entities"][0]["rows"][0]["share"], 12 / 78, places=6)
         self.assertAlmostEqual(mix["entities"][0]["rows"][-1]["value"], 3)
 
-    def test_template_replaces_stall_attribution_with_daypart_attribution(self) -> None:
+    def test_template_keeps_stall_and_daypart_attribution_sections(self) -> None:
         self.assertIn("daypartAttribution", report.HTML_TEMPLATE)
         self.assertIn("renderDaypartAttribution", report.HTML_TEMPLATE)
         self.assertIn("主要时段信号", report.HTML_TEMPLATE)
-        self.assertNotIn("stallAttribution", report.HTML_TEMPLATE)
-        self.assertNotIn("主要档口信号", report.HTML_TEMPLATE)
+        self.assertIn("stallAttribution", report.HTML_TEMPLATE)
+        self.assertIn("renderStallAttribution", report.HTML_TEMPLATE)
+        self.assertIn("主要档口信号", report.HTML_TEMPLATE)
+        self.assertIn("档口归因", report.HTML_TEMPLATE)
+        self.assertIn("时段归因", report.HTML_TEMPLATE)
 
     def test_template_includes_dish_sales_mix_pie(self) -> None:
         self.assertIn("dishMixPie", report.HTML_TEMPLATE)

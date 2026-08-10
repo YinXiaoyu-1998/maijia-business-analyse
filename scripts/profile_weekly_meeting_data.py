@@ -1707,6 +1707,26 @@ def profile(
     progress("计算时段归因。")
     daypart_comparison_rows = compare_store_dayparts(daypart_rows, target_windows)
     daypart_driver_rows = store_daypart_driver_rows(daypart_comparison_rows)
+    stall_attribution_meta: dict[str, Any] = {
+        "enabled": False,
+        "reason": "档口归因需要同时提供自助菜品取数和菜品库基础信息。",
+        "outputs": [],
+    }
+    if dish_inputs and catalog_path:
+        progress("计算档口归因。")
+        stall_attribution_meta = profile_dish_inputs(
+            dish_inputs,
+            catalog_path,
+            output_dir,
+            target_windows,
+            output_prefix="weekly",
+        )
+        stall_attribution_meta["basis"] = "分组=菜品库「总部菜品.基础分类」；指标=菜品主题数据「菜品收入」；按门店、档口比较本周、环比周、同比周。"
+    elif dish_inputs and not catalog_path:
+        stall_attribution_meta["reason"] = "已提供菜品主题数据，但缺少菜品库，未生成档口归因。"
+    elif catalog_path and not dish_inputs:
+        stall_attribution_meta["reason"] = "已提供菜品库，但缺少菜品主题数据，未生成档口归因。"
+
     dish_sales_mix_meta = profile_dish_sales_mix(
         dish_inputs,
         output_dir,
@@ -1773,6 +1793,7 @@ def profile(
                 "weekly_store_daypart_metrics.csv",
                 "weekly_store_daypart_comparison.csv",
                 "weekly_store_daypart_driver_summary.csv",
+                *stall_attribution_meta.get("outputs", []),
                 *dish_sales_mix_meta.get("outputs", []),
                 "weekly_trend_comparison_metrics.csv",
                 "weekly_store_comparison.csv",
@@ -1788,6 +1809,7 @@ def profile(
                     "weekly_store_daypart_driver_summary.csv",
                 ],
             },
+            "stall_attribution": stall_attribution_meta,
             "dish_sales_mix": dish_sales_mix_meta,
         },
         "comparison": comparison_rows,
@@ -1805,8 +1827,25 @@ def profile(
                 if not dish_sales_mix_meta.get("enabled") else []
             ),
             *(
-                ["已提供菜品库输入，但销售额菜品比例不需要菜品库；菜品库仅用于旧档口归因逻辑，本次已忽略。"]
-                if catalog_path else []
+                [stall_attribution_meta.get("reason", "未生成档口归因。")]
+                if not stall_attribution_meta.get("enabled") else []
+            ),
+            *(
+                [
+                    "档口归因使用菜品主题数据「菜品收入」和菜品库「总部菜品.基础分类」，不等同于营业分组表「订单营业收入」的精确拆分。"
+                ]
+                if stall_attribution_meta.get("enabled") else []
+            ),
+            *(
+                [
+                    "档口归因已启用，但菜品主题数据缺少部分对比周期，相关同比/环比变化可能显示为 N/A。"
+                ]
+                if stall_attribution_meta.get("enabled")
+                and any(
+                    not (coverage.get("rows") or 0)
+                    for coverage in stall_attribution_meta.get("period_coverage", {}).values()
+                )
+                else []
             ),
         ],
     }
