@@ -158,9 +158,9 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
         self.assertNotIn('id="heatmap"', report.HTML_TEMPLATE)
         self.assertNotIn("renderHeatmap()", report.HTML_TEMPLATE)
 
-    def test_growth_chart_labels_business_revenue_and_splits_dine_in_delivery_growth(self) -> None:
+    def test_growth_chart_uses_two_primary_rows_and_collapsible_channel_details(self) -> None:
         self.assertIn("业务收入同比 / 环比增长率", report.HTML_TEMPLATE)
-        self.assertIn("六色区分业务收入、堂食、外卖的环比/同比", report.HTML_TEMPLATE)
+        self.assertIn("默认仅看业务收入；点击门店可展开堂食与外卖", report.HTML_TEMPLATE)
         for label in ["业务收入环比", "业务收入同比", "堂食环比", "堂食同比", "外卖环比", "外卖同比"]:
             self.assertIn(label, report.HTML_TEMPLATE)
         for color in ["#006d77", "#1d4ed8", "#2e7d32", "#7c3aed", "#f59e0b", "#dc2626"]:
@@ -174,6 +174,14 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
             "yoy_delivery_revenue_pct",
         ]:
             self.assertIn(field, report.HTML_TEMPLATE)
+        self.assertIn("growth-primary-row", report.HTML_TEMPLATE)
+        self.assertIn("growth-channel-detail", report.HTML_TEMPLATE)
+        self.assertIn("growth-channel-row", report.HTML_TEMPLATE)
+        self.assertIn("growth-channel-metric", report.HTML_TEMPLATE)
+        self.assertIn("查看渠道明细", report.HTML_TEMPLATE)
+        self.assertIn("收起渠道明细", report.HTML_TEMPLATE)
+        self.assertIn("aria-expanded", report.HTML_TEMPLATE)
+        self.assertIn("hidden = !expanded", report.HTML_TEMPLATE)
 
     def test_payload_keeps_daypart_and_stall_attribution_independent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

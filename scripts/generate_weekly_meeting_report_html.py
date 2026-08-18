@@ -673,6 +673,27 @@ HTML_TEMPLATE = r'''<!doctype html>
     .mini-select:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(0, 109, 119, .12); }
     .chart { width: 100%; min-height: 310px; overflow: hidden; position: relative; }
     .chart svg { display: block; width: 100%; min-height: 310px; }
+    .growth-board { margin-top: 10px; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+    .growth-legend { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; color: var(--muted); font-size: 12px; padding: 4px 0 8px; }
+    .growth-store { padding: 14px 16px; border-top: 1px solid var(--line); }
+    .growth-store:first-child { border-top: 0; }
+    .growth-store-head { display: grid; grid-template-columns: 132px minmax(0, 1fr) 138px; gap: 16px; align-items: center; }
+    .growth-store-name { color: var(--ink); font-size: 14px; font-weight: 820; }
+    .growth-primary { display: grid; gap: 5px; }
+    .growth-primary-row { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 10px; align-items: center; min-height: 30px; }
+    .growth-metric-label { color: var(--muted); font-size: 12px; font-weight: 760; white-space: nowrap; }
+    .growth-axis { min-width: 0; }
+    .growth-axis svg { display: block; width: 100%; height: 28px; min-height: 0; }
+    .growth-toggle { border: 1px solid #9bb8e8; border-radius: 6px; background: #fff; color: #1d4ed8; padding: 8px 10px; font: inherit; font-size: 12px; font-weight: 760; cursor: pointer; white-space: nowrap; }
+    .growth-toggle:hover { background: #f3f7ff; border-color: #1d4ed8; }
+    .growth-toggle:focus-visible { outline: 3px solid rgba(29, 78, 216, .18); outline-offset: 2px; }
+    .growth-channel-detail { margin: 12px 0 0 148px; padding: 8px 12px; border: 1px solid #dce8ef; border-radius: 7px; background: #f7fbfc; }
+    .growth-channel-detail[hidden] { display: none; }
+    .growth-channel-row { display: grid; grid-template-columns: 62px minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: center; padding: 8px 0; }
+    .growth-channel-row + .growth-channel-row { border-top: 1px solid #e3ebf0; }
+    .growth-channel-name { color: var(--ink); font-size: 13px; font-weight: 820; }
+    .growth-channel-metric { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 8px; align-items: center; }
+    .growth-channel-metric .growth-metric-label { font-size: 11px; }
     .chart-tooltip {
       position: absolute;
       display: none;
@@ -708,12 +729,20 @@ HTML_TEMPLATE = r'''<!doctype html>
       .hero, .grid-2, .grid-3 { grid-template-columns: 1fr; }
       .grid-4, .rule-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .section-head { align-items: start; flex-direction: column; }
+      .growth-store-head { grid-template-columns: 108px minmax(0, 1fr); }
+      .growth-toggle { grid-column: 2; justify-self: start; }
+      .growth-channel-detail { margin-left: 124px; }
     }
     @media (max-width: 620px) {
       main { padding: 18px 14px 48px; }
       .topbar-inner { align-items: start; flex-direction: column; }
       .grid-4, .rule-grid { grid-template-columns: 1fr; }
       h1 { font-size: 30px; }
+      .growth-store-head { grid-template-columns: 1fr; }
+      .growth-primary-row { grid-template-columns: 92px minmax(0, 1fr); }
+      .growth-toggle { grid-column: 1; }
+      .growth-channel-detail { margin-left: 0; }
+      .growth-channel-row { grid-template-columns: 1fr; gap: 6px; }
     }
   </style>
 </head>
@@ -775,7 +804,7 @@ HTML_TEMPLATE = r'''<!doctype html>
         </div>
       </div>
       <div class="panel full-row">
-        <div class="panel-head"><h3>业务收入同比 / 环比增长率</h3><span class="label">六色区分业务收入、堂食、外卖的环比/同比；正向右，负向左</span></div>
+        <div class="panel-head"><h3>业务收入同比 / 环比增长率</h3><span class="label">默认仅看业务收入；点击门店可展开堂食与外卖</span></div>
         <div class="chart" id="growthBar"></div>
       </div>
       <div class="panel full-row">
@@ -1033,45 +1062,136 @@ HTML_TEMPLATE = r'''<!doctype html>
     function renderGrowthBar() {
       const el = document.getElementById('growthBar');
       const rows = stores.slice().sort((a,b)=>Number(b.wow_net_revenue_pct||0)-Number(a.wow_net_revenue_pct||0));
-      const metrics = [
-        {field:'wow_net_revenue_pct', label:'业务收入环比', lane:'业务收入', color:'#006d77', off:0},
-        {field:'yoy_net_revenue_pct', label:'业务收入同比', lane:'业务收入', color:'#1d4ed8', off:12},
-        {field:'wow_dine_in_revenue_pct', label:'堂食环比', lane:'堂食', color:'#2e7d32', off:30},
-        {field:'yoy_dine_in_revenue_pct', label:'堂食同比', lane:'堂食', color:'#7c3aed', off:42},
-        {field:'wow_delivery_revenue_pct', label:'外卖环比', lane:'外卖', color:'#f59e0b', off:60},
-        {field:'yoy_delivery_revenue_pct', label:'外卖同比', lane:'外卖', color:'#dc2626', off:72},
+      const primaryMetrics = [
+        {field:'wow_net_revenue_pct', label:'业务收入环比', color:'#006d77'},
+        {field:'yoy_net_revenue_pct', label:'业务收入同比', color:'#1d4ed8'},
       ];
-      const w = 1120, rowH = 98, h = Math.max(520, rows.length * rowH + 112), left = 220, mid = 610, right = 120;
-      const vals = rows.flatMap(r => metrics.map(metric => Number(r[metric.field] || 0)));
-      const max = Math.max(...vals.map(v => Math.abs(v)), .01);
-      const root = svg('svg', {viewBox:`0 0 ${w} ${h}`});
-      metrics.forEach((metric, index) => {
-        const x = left + (index % 3) * 160;
-        const y = 16 + Math.floor(index / 3) * 18;
-        root.appendChild(svg('rect', {x, y, width:12, height:12, rx:2, fill:metric.color}));
-        root.appendChild(svg('text', {x:x+18, y:y+11, 'font-size':'12', fill:'#657386', 'font-weight':'700'})).textContent = metric.label;
-      });
-      root.appendChild(svg('text', {x: w - right, y: 29, 'text-anchor':'end', 'font-size':'11', fill:'#657386'})).textContent = '0% 为中心线';
-      root.appendChild(svg('line', {x1: mid, y1: 56, x2: mid, y2: h - 26, stroke:'#d9e2ea'}));
-      rows.forEach((r, i) => {
-        const y = 70 + i * rowH;
-        if (i > 0) {
-          root.appendChild(svg('line', {x1: left - 84, y1: y - 14, x2: w - right, y2: y - 14, stroke:'#d9e2ea', 'stroke-dasharray':'5 6'}));
+      const channelRows = [
+        {label:'堂食', metrics:[
+          {field:'wow_dine_in_revenue_pct', label:'堂食环比', shortLabel:'环比', color:'#2e7d32'},
+          {field:'yoy_dine_in_revenue_pct', label:'堂食同比', shortLabel:'同比', color:'#7c3aed'},
+        ]},
+        {label:'外卖', metrics:[
+          {field:'wow_delivery_revenue_pct', label:'外卖环比', shortLabel:'环比', color:'#f59e0b'},
+          {field:'yoy_delivery_revenue_pct', label:'外卖同比', shortLabel:'同比', color:'#dc2626'},
+        ]},
+      ];
+      const primaryValues = rows.flatMap(row => primaryMetrics.map(metric => Number(row[metric.field] || 0)));
+      const channelValues = rows.flatMap(row => channelRows.flatMap(channel => channel.metrics.map(metric => Number(row[metric.field] || 0))));
+      const primaryMax = Math.max(...primaryValues.map(value => Math.abs(value)), .01);
+      const channelMax = Math.max(...channelValues.map(value => Math.abs(value)), .01);
+
+      function signedGrowthAxis(rawValue, color, maxValue, ariaLabel) {
+        const hasValue = rawValue !== null && rawValue !== undefined && rawValue !== '';
+        const value = hasValue ? Number(rawValue) : null;
+        const w = 420, h = 28, mid = 210, maxBar = 154;
+        const root = svg('svg', {viewBox:`0 0 ${w} ${h}`, role:'img', 'aria-label':`${ariaLabel} ${fmtPct(value)}`});
+        root.appendChild(svg('line', {x1:mid, y1:2, x2:mid, y2:h-2, stroke:'#cbd8e3'}));
+        if (value === null || !Number.isFinite(value)) {
+          root.appendChild(svg('text', {x:mid+8, y:18, 'font-size':'11', fill:'#8a97a8'})).textContent = 'N/A';
+          return root;
         }
-        root.appendChild(svg('text', {x: left - 92, y: y + 42, 'text-anchor':'end', 'font-size':'12', fill:'#344054', 'font-weight':'760'})).textContent = cleanName(r['门店名称']);
-        [['业务收入', 6], ['堂食', 36], ['外卖', 66]].forEach(([lane, laneY]) => {
-          root.appendChild(svg('text', {x: left - 12, y: y + Number(laneY) + 9, 'text-anchor':'end', 'font-size':'11', fill:'#657386'})).textContent = lane;
+        const width = Math.abs(value) / maxValue * maxBar;
+        const x = value >= 0 ? mid : mid - width;
+        root.appendChild(svg('rect', {x, y:8, width:Math.max(width, value === 0 ? 1 : 2), height:12, rx:3, fill:color}));
+        root.appendChild(svg('text', {
+          x:value >= 0 ? x + width + 8 : x - 8,
+          y:18,
+          'text-anchor':value >= 0 ? 'start':'end',
+          'font-size':'11',
+          fill:'#657386',
+          'font-weight':'700',
+        })).textContent = fmtPct(value);
+        return root;
+      }
+
+      const legend = document.createElement('div');
+      legend.className = 'growth-legend';
+      primaryMetrics.forEach(metric => {
+        const item = document.createElement('span');
+        item.innerHTML = `<i class="swatch" style="background:${metric.color}"></i>${metric.label}`;
+        legend.appendChild(item);
+      });
+      const axisNote = document.createElement('span');
+      axisNote.textContent = '每项独立成行；0% 为中心线';
+      legend.appendChild(axisNote);
+
+      const board = document.createElement('div');
+      board.className = 'growth-board';
+      rows.forEach((row, index) => {
+        const store = document.createElement('section');
+        store.className = 'growth-store';
+
+        const head = document.createElement('div');
+        head.className = 'growth-store-head';
+        const storeName = document.createElement('div');
+        storeName.className = 'growth-store-name';
+        storeName.textContent = cleanName(row['门店名称']);
+
+        const primary = document.createElement('div');
+        primary.className = 'growth-primary';
+        primaryMetrics.forEach(metric => {
+          const metricRow = document.createElement('div');
+          metricRow.className = 'growth-primary-row';
+          const label = document.createElement('span');
+          label.className = 'growth-metric-label';
+          label.textContent = metric.label;
+          const axis = document.createElement('div');
+          axis.className = 'growth-axis';
+          axis.appendChild(signedGrowthAxis(row[metric.field], metric.color, primaryMax, metric.label));
+          metricRow.append(label, axis);
+          primary.appendChild(metricRow);
         });
-        metrics.forEach(metric => {
-          const v = Number(r[metric.field] || 0);
-          const bw = Math.abs(v) / max * 320;
-          const x = v >= 0 ? mid : mid - bw;
-          root.appendChild(svg('rect', {x, y:y+metric.off, width:bw, height:10, rx:2, fill:metric.color}));
-          root.appendChild(svg('text', {x: v >= 0 ? x + bw + 7 : x - 7, y:y+metric.off+9, 'text-anchor': v >= 0 ? 'start':'end', 'font-size':'10', fill:'#657386'})).textContent = fmtPct(v);
+
+        const detailId = `growth-channel-detail-${index}`;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'growth-toggle';
+        button.textContent = '查看渠道明细 ▾';
+        button.setAttribute('aria-expanded', 'false');
+        button.setAttribute('aria-controls', detailId);
+        button.setAttribute('aria-label', `${cleanName(row['门店名称'])} 查看渠道明细`);
+        head.append(storeName, primary, button);
+
+        const detail = document.createElement('div');
+        detail.id = detailId;
+        detail.className = 'growth-channel-detail';
+        detail.hidden = true;
+        channelRows.forEach(channel => {
+          const channelRow = document.createElement('div');
+          channelRow.className = 'growth-channel-row';
+          const channelName = document.createElement('div');
+          channelName.className = 'growth-channel-name';
+          channelName.textContent = channel.label;
+          channelRow.appendChild(channelName);
+          channel.metrics.forEach(metric => {
+            const metricCell = document.createElement('div');
+            metricCell.className = 'growth-channel-metric';
+            const label = document.createElement('span');
+            label.className = 'growth-metric-label';
+            label.textContent = metric.shortLabel;
+            label.style.color = metric.color;
+            const axis = document.createElement('div');
+            axis.className = 'growth-axis';
+            axis.appendChild(signedGrowthAxis(row[metric.field], metric.color, channelMax, metric.label));
+            metricCell.append(label, axis);
+            channelRow.appendChild(metricCell);
+          });
+          detail.appendChild(channelRow);
         });
+
+        button.addEventListener('click', () => {
+          const expanded = button.getAttribute('aria-expanded') !== 'true';
+          button.setAttribute('aria-expanded', String(expanded));
+          detail.hidden = !expanded;
+          button.textContent = expanded ? '收起渠道明细 ▴' : '查看渠道明细 ▾';
+          button.setAttribute('aria-label', `${cleanName(row['门店名称'])} ${expanded ? '收起渠道明细' : '查看渠道明细'}`);
+        });
+        store.append(head, detail);
+        board.appendChild(store);
       });
       el.innerHTML = '';
-      el.appendChild(root);
+      el.append(legend, board);
     }
     function renderBucketedScatter() {
       const el = document.getElementById('scatter');
