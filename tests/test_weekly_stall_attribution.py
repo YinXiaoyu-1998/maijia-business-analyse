@@ -39,6 +39,44 @@ class WeeklyStallAttributionTest(unittest.TestCase):
         self.assertEqual(stall, "高品质烤羊肉")
         self.assertEqual(status, "matched")
 
+    def test_resolve_stall_from_names_uses_linked_name_when_display_name_is_unmatched(self) -> None:
+        catalog = self.catalog_for({"烤羊腿肉": "高品质烤羊肉"})
+
+        stall, status, source = profile.resolve_stall_from_names(
+            "内蒙羊腿肉（精选羊后腿肉穿制）",
+            "烤羊腿肉",
+            catalog,
+        )
+
+        self.assertEqual(stall, "高品质烤羊肉")
+        self.assertEqual(status, "matched")
+        self.assertEqual(source, "linked_dish_name")
+
+    def test_resolve_stall_from_names_preserves_primary_match_when_names_conflict(self) -> None:
+        catalog = self.catalog_for({
+            "酸辣海带丝": "爽口凉菜",
+            "外-酸辣海带丝": "外卖品项",
+        })
+
+        stall, status, source = profile.resolve_stall_from_names(
+            "酸辣海带丝",
+            "外-酸辣海带丝",
+            catalog,
+        )
+
+        self.assertEqual(stall, "爽口凉菜")
+        self.assertEqual(status, "matched")
+        self.assertEqual(source, "dish_name")
+
+    def test_resolve_stall_from_names_reports_unmatched_when_neither_name_matches(self) -> None:
+        catalog = self.catalog_for({"烤羊腿肉": "高品质烤羊肉"})
+
+        stall, status, source = profile.resolve_stall_from_names("辣炒花甲", "农家辣炒花蛤", catalog)
+
+        self.assertEqual(stall, "未匹配菜品库")
+        self.assertEqual(status, "unmatched")
+        self.assertEqual(source, "none")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -357,6 +357,7 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
         self.assertIn("renderStallAttribution", report.HTML_TEMPLATE)
         self.assertIn("主要档口信号", report.HTML_TEMPLATE)
         self.assertIn("档口归因", report.HTML_TEMPLATE)
+        self.assertIn("关联名称补齐", report.HTML_TEMPLATE)
         self.assertIn("时段归因", report.HTML_TEMPLATE)
 
     def test_template_does_not_hide_the_ninth_store_in_attribution_tables(self) -> None:

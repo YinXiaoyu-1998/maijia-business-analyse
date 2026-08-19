@@ -65,6 +65,7 @@ DISH_REQUIRED_COLUMNS = [
     "营业日",
     "门店",
     "菜品名称",
+    "关联菜品名称",
     "订单分类",
     "菜品销售数量",
     "菜品销售额",
@@ -755,6 +756,26 @@ def resolve_stall(dish_name: str, catalog: dict[str, Any]) -> tuple[str, str]:
     return next(iter(candidates)), "matched"
 
 
+def resolve_stall_from_names(
+    dish_name: str,
+    linked_dish_name: str,
+    catalog: dict[str, Any],
+) -> tuple[str, str, str]:
+    """Resolve a stall using the display name first, then the linked canonical name."""
+    stall, status = resolve_stall(dish_name, catalog)
+    if status == "matched":
+        return stall, status, "dish_name"
+
+    linked_stall, linked_status = resolve_stall(linked_dish_name, catalog)
+    if linked_status == "matched":
+        return linked_stall, linked_status, "linked_dish_name"
+    if status == "ambiguous":
+        return stall, status, "none"
+    if linked_status == "ambiguous":
+        return linked_stall, linked_status, "none"
+    return "未匹配菜品库", "unmatched", "none"
+
+
 def new_dish_agg() -> dict[str, Any]:
     return {
         "rows": 0,
@@ -1204,6 +1225,7 @@ def profile_dish_inputs(
     store_stall_period: dict[tuple[Any, ...], dict[str, Any]] = defaultdict(new_dish_agg)
     store_stall_dish_period: dict[tuple[Any, ...], dict[str, Any]] = defaultdict(new_dish_agg)
     match_counts: dict[str, int] = defaultdict(int)
+    match_source_counts: dict[str, int] = defaultdict(int)
     period_counts: dict[str, int] = defaultdict(int)
     period_dates: dict[str, set[date]] = defaultdict(set)
     processed_dates: set[date] = set()
@@ -1250,9 +1272,11 @@ def profile_dish_inputs(
 
             store = row.get("门店", "") or "未知门店"
             dish_name = row.get("菜品名称", "") or "未知菜品"
+            linked_dish_name = row.get("关联菜品名称", "")
             channel = row.get("订单分类", "") or "未知渠道"
-            stall, match_status = resolve_stall(dish_name, catalog)
+            stall, match_status, match_source = resolve_stall_from_names(dish_name, linked_dish_name, catalog)
             match_counts[match_status] += 1
+            match_source_counts[match_source] += 1
             processed_dates.add(parsed_date)
             period_counts[period_key] += 1
             period_dates[period_key].add(parsed_date)
@@ -1289,6 +1313,8 @@ def profile_dish_inputs(
     match_rows = [
         {"metric": "processed_rows", "value": processed_rows},
         {"metric": "matched_rows", "value": matched},
+        {"metric": "dish_name_matched_rows", "value": match_source_counts.get("dish_name", 0)},
+        {"metric": "linked_name_rescued_rows", "value": match_source_counts.get("linked_dish_name", 0)},
         {"metric": "unmatched_rows", "value": match_counts.get("unmatched", 0)},
         {"metric": "ambiguous_rows", "value": match_counts.get("ambiguous", 0)},
         {"metric": "match_rate", "value": fmt(match_rate, 4)},
@@ -1334,6 +1360,7 @@ def profile_dish_inputs(
             for key, (label, _start, _end) in target_windows.items()
         },
         "match_counts": dict(match_counts),
+        "match_source_counts": dict(match_source_counts),
         "match_rate": fmt(match_rate, 4),
         "outputs": [
             stall_metrics_name,
@@ -1747,7 +1774,7 @@ def profile(
             target_windows,
             output_prefix="weekly",
         )
-        stall_attribution_meta["basis"] = "分组=菜品库「总部菜品.基础分类」；指标=菜品主题数据「菜品收入」；按门店、档口比较本周、环比周、同比周。"
+        stall_attribution_meta["basis"] = "分组=菜品名称优先匹配菜品库「总部菜品.基础分类」，未匹配时使用关联菜品名称补齐；指标=菜品主题数据「菜品收入」；按门店、档口比较本周、环比周、同比周。"
     elif dish_inputs and not catalog_path:
         stall_attribution_meta["reason"] = "已提供菜品主题数据，但缺少菜品库，未生成档口归因。"
     elif catalog_path and not dish_inputs:
