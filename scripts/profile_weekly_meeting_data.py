@@ -218,13 +218,14 @@ DAYPART_DRIVER_SUMMARY_FIELDS = [
 DINE_IN_DISH_CHANNEL = "店内销售"
 ALL_STORES_LABEL = "全体门店"
 
-DISH_SALES_MIX_FIELDS = [
+UNMATCHED_STALL_MIX_LABEL = "未匹配"
+
+STALL_SALES_MIX_FIELDS = [
     "period_key",
     "period_label",
     "门店名称",
-    "菜品名称",
-    "dish_income",
-    "dish_sales",
+    "档口",
+    "stall_income",
     "quantity",
     "dine_in_revenue",
     "share",
@@ -1385,22 +1386,24 @@ def build_dine_in_revenue_map(target_rows: list[dict[str, Any]]) -> dict[tuple[s
     return dict(revenue_by_period_store)
 
 
-def profile_dish_sales_mix(
+def profile_stall_sales_mix(
     dish_inputs: list[Path] | None,
+    catalog_path: Path | None,
     output_dir: Path,
     target_windows: dict[str, tuple[str, date, date]],
     dine_in_revenue_by_period_store: dict[tuple[str, str], float],
     output_prefix: str = "weekly",
 ) -> dict[str, Any]:
-    output_name = f"{output_prefix}_store_dish_sales_mix.csv"
-    if not dish_inputs:
-        progress("未提供菜品主题数据，跳过销售额菜品比例。")
+    output_name = f"{output_prefix}_store_stall_sales_mix.csv"
+    if not dish_inputs or not catalog_path:
+        progress("缺少菜品主题数据或菜品库，跳过档口占比。")
         return {
             "enabled": False,
-            "reason": "未提供菜品主题数据，未生成销售额菜品比例。",
+            "reason": "档口占比需要同时提供菜品主题数据和菜品库。",
             "outputs": [],
         }
 
+    catalog = load_catalog(catalog_path)
     inspections = []
     for index, path in enumerate(dish_inputs, start=1):
         progress(f"检查菜品输入 {index}/{len(dish_inputs)}: {short_path(path)}")
@@ -1422,6 +1425,8 @@ def profile_dish_sales_mix(
     period_counts: dict[str, int] = defaultdict(int)
     period_dates: dict[str, set[date]] = defaultdict(set)
     income_by_period_store: dict[tuple[str, str], float] = defaultdict(float)
+    match_counts: dict[str, int] = defaultdict(int)
+    match_source_counts: dict[str, int] = defaultdict(int)
     processed_dates: set[date] = set()
     processed_rows = 0
     skipped_duplicate_rows = 0
@@ -1476,17 +1481,27 @@ def profile_dish_sales_mix(
             period_label = target_windows[period_key][0]
             store = row.get("门店", "") or "未知门店"
             dish_name = row.get("菜品名称", "") or "未知菜品"
+            linked_dish_name = row.get("关联菜品名称", "")
+            stall, match_status, match_source = resolve_stall_from_names(
+                dish_name,
+                linked_dish_name,
+                catalog,
+            )
+            if match_status != "matched":
+                stall = UNMATCHED_STALL_MIX_LABEL
             income = safe_float(row.get("菜品收入"))
             processed_rows += 1
             file_processed_rows += 1
             processed_dates.add(parsed_date)
             period_counts[period_key] += 1
             period_dates[period_key].add(parsed_date)
+            match_counts[match_status] += 1
+            match_source_counts[match_source] += 1
             income_by_period_store[(period_key, store)] += income
             income_by_period_store[(period_key, ALL_STORES_LABEL)] += income
 
-            add_to_dish_agg(groups[(period_key, period_label, store, dish_name)], row, parsed_date)
-            add_to_dish_agg(groups[(period_key, period_label, ALL_STORES_LABEL, dish_name)], row, parsed_date)
+            add_to_dish_agg(groups[(period_key, period_label, store, stall)], row, parsed_date)
+            add_to_dish_agg(groups[(period_key, period_label, ALL_STORES_LABEL, stall)], row, parsed_date)
             if file_scanned_rows % PROGRESS_ROW_INTERVAL == 0:
                 progress(
                     f"菜品输入 {index + 1}/{len(dish_inputs)} 已扫描 {file_scanned_rows:,} 行，"
@@ -1497,32 +1512,31 @@ def profile_dish_sales_mix(
             f"纳入店内销售 {file_processed_rows:,} 行。"
         )
 
-    progress("汇总销售额菜品比例。")
+    progress("汇总档口占比。")
     rows: list[dict[str, Any]] = []
-    for (period_key, period_label, store, dish_name), agg in groups.items():
+    for (period_key, period_label, store, stall), agg in groups.items():
         sums = agg["sums"]
         denominator = dine_in_revenue_by_period_store.get((period_key, store), 0.0)
         rows.append({
             "period_key": period_key,
             "period_label": period_label,
             "门店名称": store,
-            "菜品名称": dish_name,
-            "dish_income": fmt(sums["income"], 2),
-            "dish_sales": fmt(sums["sales"], 2),
+            "档口": stall,
+            "stall_income": fmt(sums["income"], 2),
             "quantity": fmt(sums["quantity"], 2),
             "dine_in_revenue": fmt(denominator, 2),
             "share": fmt(safe_div(sums["income"], denominator), 6),
         })
-    rows.sort(key=lambda row: (str(row["period_key"]), str(row["门店名称"]), -float(row.get("dish_income") or 0), str(row["菜品名称"])))
-    write_csv(output_dir / output_name, rows, DISH_SALES_MIX_FIELDS)
-    progress(f"写出销售额菜品比例: {output_name} rows={len(rows):,}")
+    rows.sort(key=lambda row: (str(row["period_key"]), str(row["门店名称"]), -float(row.get("stall_income") or 0), str(row["档口"])))
+    write_csv(output_dir / output_name, rows, STALL_SALES_MIX_FIELDS)
+    progress(f"写出档口占比: {output_name} rows={len(rows):,}")
 
     current_key = "current"
     current_revenue = dine_in_revenue_by_period_store.get((current_key, ALL_STORES_LABEL), 0.0)
     current_income = income_by_period_store.get((current_key, ALL_STORES_LABEL), 0.0)
     return {
         "enabled": bool(rows) and current_income > 0,
-        "basis": "分母=营业分组表「店内营业收入」；分子=菜品主题数据中「订单分类=店内销售」的「菜品收入」。",
+        "basis": "分母=营业分组表「店内营业收入」；分子=按双名称规则归入档口的店内销售「菜品收入」合计；未匹配单列。",
         "inputs": [
             {
                 "path": info["path"],
@@ -1542,8 +1556,16 @@ def profile_dish_sales_mix(
         "skipped_non_dine_in_rows": skipped_non_dine_in_rows,
         "skipped_out_of_scope_files": skipped_out_of_scope_files,
         "current_business_dine_in_revenue": fmt(current_revenue, 2),
-        "current_dish_dine_in_income": fmt(current_income, 2),
+        "current_stall_dine_in_income": fmt(current_income, 2),
         "current_reconciliation_delta": fmt(current_income - current_revenue, 2),
+        "match_counts": dict(match_counts),
+        "match_source_counts": dict(match_source_counts),
+        "catalog": {
+            "path": catalog["path"],
+            "title": catalog["title"],
+            "rows": catalog["rows"],
+            "stall_count": catalog["stall_count"],
+        },
         "period_coverage": {
             key: {
                 "label": label,
@@ -1551,7 +1573,7 @@ def profile_dish_sales_mix(
                 "date_start": date_text(min(period_dates[key])) if period_dates.get(key) else None,
                 "date_end": date_text(max(period_dates[key])) if period_dates.get(key) else None,
                 "business_dine_in_revenue": fmt(dine_in_revenue_by_period_store.get((key, ALL_STORES_LABEL), 0.0), 2),
-                "dish_dine_in_income": fmt(income_by_period_store.get((key, ALL_STORES_LABEL), 0.0), 2),
+                "stall_dine_in_income": fmt(income_by_period_store.get((key, ALL_STORES_LABEL), 0.0), 2),
             }
             for key, (label, _start, _end) in target_windows.items()
         },
@@ -1780,8 +1802,9 @@ def profile(
     elif catalog_path and not dish_inputs:
         stall_attribution_meta["reason"] = "已提供菜品库，但缺少菜品主题数据，未生成档口归因。"
 
-    dish_sales_mix_meta = profile_dish_sales_mix(
+    stall_sales_mix_meta = profile_stall_sales_mix(
         dish_inputs,
+        catalog_path,
         output_dir,
         target_windows,
         build_dine_in_revenue_map(target_rows),
@@ -1847,7 +1870,7 @@ def profile(
                 "weekly_store_daypart_comparison.csv",
                 "weekly_store_daypart_driver_summary.csv",
                 *stall_attribution_meta.get("outputs", []),
-                *dish_sales_mix_meta.get("outputs", []),
+                *stall_sales_mix_meta.get("outputs", []),
                 "weekly_trend_comparison_metrics.csv",
                 "weekly_store_comparison.csv",
                 "store_driver_summary.csv",
@@ -1863,7 +1886,7 @@ def profile(
                 ],
             },
             "stall_attribution": stall_attribution_meta,
-            "dish_sales_mix": dish_sales_mix_meta,
+            "stall_sales_mix": stall_sales_mix_meta,
         },
         "comparison": comparison_rows,
         "drivers": driver_rows,
@@ -1876,8 +1899,8 @@ def profile(
             "当前营业分组表没有网评分数、评论文本字段，不能做网评分数和词云分析。",
             "时段归因基于营业分组表「时段」字段，可定位收入变化发生在哪些时段；不直接解释菜品或现场运营原因。",
             *(
-                [dish_sales_mix_meta.get("reason", "未提供菜品主题数据，未生成销售额菜品比例。")]
-                if not dish_sales_mix_meta.get("enabled") else []
+                [stall_sales_mix_meta.get("reason", "缺少菜品主题数据或菜品库，未生成档口占比。")]
+                if not stall_sales_mix_meta.get("enabled") else []
             ),
             *(
                 [stall_attribution_meta.get("reason", "未生成档口归因。")]

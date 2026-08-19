@@ -23,7 +23,7 @@ from profile_weekly_meeting_data import (
     build_dine_in_revenue_map,
     inspect_workbook,
     parse_date,
-    profile_dish_sales_mix,
+    profile_stall_sales_mix,
     progress,
     read_workbook_sheet_rows,
     row_dict,
@@ -300,8 +300,9 @@ def profile(
     progress("计算时段归因。")
     daypart_comparison_rows = compare_store_dayparts(daypart_rows, target_windows)
     daypart_driver_rows = store_daypart_driver_rows(daypart_comparison_rows)
-    dish_sales_mix_meta = profile_dish_sales_mix(
+    stall_sales_mix_meta = profile_stall_sales_mix(
         dish_inputs,
+        catalog_path,
         output_dir,
         target_windows,
         build_dine_in_revenue_map(target_rows),
@@ -368,7 +369,7 @@ def profile(
                 "monthly_store_daypart_metrics.csv",
                 "monthly_store_daypart_comparison.csv",
                 "monthly_store_daypart_driver_summary.csv",
-                *dish_sales_mix_meta.get("outputs", []),
+                *stall_sales_mix_meta.get("outputs", []),
                 "monthly_trend_comparison_metrics.csv",
                 "monthly_store_comparison.csv",
                 "store_driver_summary.csv",
@@ -383,7 +384,7 @@ def profile(
                     "monthly_store_daypart_driver_summary.csv",
                 ],
             },
-            "dish_sales_mix": dish_sales_mix_meta,
+            "stall_sales_mix": stall_sales_mix_meta,
         },
         "comparison": comparison_rows,
         "drivers": driver_rows,
@@ -396,12 +397,8 @@ def profile(
             "当前营业分组表没有网评分数、评论文本字段，不能做网评分数和词云分析。",
             "时段归因基于营业分组表「时段」字段，可定位收入变化发生在哪些时段；不直接解释菜品或现场运营原因。",
             *(
-                [dish_sales_mix_meta.get("reason", "未提供菜品主题数据，未生成销售额菜品比例。")]
-                if not dish_sales_mix_meta.get("enabled") else []
-            ),
-            *(
-                ["已提供菜品库输入，但销售额菜品比例不需要菜品库；菜品库仅用于旧档口归因逻辑，本次已忽略。"]
-                if catalog_path else []
+                [stall_sales_mix_meta.get("reason", "缺少菜品主题数据或菜品库，未生成档口占比。")]
+                if not stall_sales_mix_meta.get("enabled") else []
             ),
         ],
     }

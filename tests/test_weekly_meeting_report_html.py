@@ -291,7 +291,7 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
         self.assertIn("colors.maximum", report.HTML_TEMPLATE)
         self.assertIn("'7 5'", report.HTML_TEMPLATE)
 
-    def test_payload_builds_dish_sales_mix_top_ten_and_other(self) -> None:
+    def test_payload_builds_stall_sales_mix_with_unmatched_separate_from_other(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             input_dir = Path(tmp)
             (input_dir / "weekly_meeting_summary.json").write_text(
@@ -308,7 +308,7 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
                             "processed_rows": 4,
                             "store_count": 1,
                             "outputs": [],
-                            "dish_sales_mix": {"enabled": True, "basis": "测试菜品比例"},
+                            "stall_sales_mix": {"enabled": True, "basis": "测试档口比例"},
                         },
                         "data_gaps": [],
                     },
@@ -322,31 +322,46 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
             write_csv(input_dir / "weekly_store_channel_metrics.csv", [{"period": "本周", "门店名称": "麦家小馆（甲店）", "channel": "堂食", "net_revenue": 1000}])
             write_csv(input_dir / "weekly_store_daypart_metrics.csv", [{"period": "本周", "门店名称": "麦家小馆（甲店）", "餐段": "午餐", "时段": "12", "net_revenue": 1000}])
             write_csv(input_dir / "weekly_store_metrics.csv", [{"week_label": "07/13-07/19", "week_end": "2026/07/19", "门店名称": "麦家小馆（甲店）", "net_revenue": 1000}])
-            dish_rows = [
+            stall_rows = [
                 {
                     "period_key": "current",
                     "period_label": "本周",
                     "门店名称": "全体门店",
-                    "菜品名称": f"菜品{index}",
-                    "dish_income": 12 - index,
-                    "dish_sales": 12 - index,
+                    "档口": f"档口{index}",
+                    "stall_income": 12 - index,
                     "quantity": index,
-                    "dine_in_revenue": 78,
-                    "share": (12 - index) / 78,
+                    "dine_in_revenue": 83,
+                    "share": (12 - index) / 83,
                 }
                 for index in range(12)
             ]
-            write_csv(input_dir / "weekly_store_dish_sales_mix.csv", dish_rows)
+            stall_rows.append(
+                {
+                    "period_key": "current",
+                    "period_label": "本周",
+                    "门店名称": "全体门店",
+                    "档口": "未匹配",
+                    "stall_income": 5,
+                    "quantity": 2,
+                    "dine_in_revenue": 83,
+                    "share": 5 / 83,
+                }
+            )
+            write_csv(input_dir / "weekly_store_stall_sales_mix.csv", stall_rows)
 
             payload = report.build_payload(input_dir, "麦家小馆")
 
-        mix = payload["dish_sales_mix"]
+        mix = payload["stall_sales_mix"]
         self.assertTrue(mix["enabled"])
         self.assertEqual(mix["entities"][0]["key"], "__all__")
-        self.assertEqual(len(mix["entities"][0]["rows"]), 11)
-        self.assertEqual(mix["entities"][0]["rows"][0]["name"], "菜品0")
+        self.assertEqual(len(mix["entities"][0]["rows"]), 12)
+        self.assertEqual(mix["entities"][0]["rows"][0]["name"], "档口0")
+        self.assertEqual(mix["entities"][0]["rows"][-2]["name"], "未匹配")
+        self.assertTrue(mix["entities"][0]["rows"][-2]["is_unmatched"])
         self.assertEqual(mix["entities"][0]["rows"][-1]["name"], "其他")
-        self.assertAlmostEqual(mix["entities"][0]["rows"][0]["share"], 12 / 78, places=6)
+        self.assertFalse(mix["entities"][0]["rows"][-1]["is_unmatched"])
+        self.assertAlmostEqual(mix["entities"][0]["rows"][0]["share"], 12 / 83, places=6)
+        self.assertAlmostEqual(mix["entities"][0]["rows"][-2]["value"], 5)
         self.assertAlmostEqual(mix["entities"][0]["rows"][-1]["value"], 3)
 
     def test_template_keeps_stall_and_daypart_attribution_sections(self) -> None:
@@ -366,10 +381,11 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
         self.assertNotIn("(daypart.drivers || []).slice(0, 8)", report.HTML_TEMPLATE)
         self.assertNotIn("(daypart.yoy_drivers || []).slice(0, 8)", report.HTML_TEMPLATE)
 
-    def test_template_includes_dish_sales_mix_pie(self) -> None:
-        self.assertIn("dishMixPie", report.HTML_TEMPLATE)
-        self.assertIn("renderDishSalesMix", report.HTML_TEMPLATE)
-        self.assertIn("销售额菜品比例", report.HTML_TEMPLATE)
+    def test_template_includes_stall_sales_mix_pie(self) -> None:
+        self.assertIn("stallMixPie", report.HTML_TEMPLATE)
+        self.assertIn("renderStallSalesMix", report.HTML_TEMPLATE)
+        self.assertIn("档口占比", report.HTML_TEMPLATE)
+        self.assertIn("未匹配", report.HTML_TEMPLATE)
 
     def test_template_clamps_chart_tooltips_inside_chart_container(self) -> None:
         self.assertIn("function positionTooltip", report.HTML_TEMPLATE)

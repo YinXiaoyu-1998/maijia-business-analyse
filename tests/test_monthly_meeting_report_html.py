@@ -43,6 +43,7 @@ class MonthlyMeetingReportHtmlTest(unittest.TestCase):
                             "processed_rows": 3,
                             "store_count": 1,
                             "outputs": [],
+                            "stall_sales_mix": {"enabled": True, "basis": "测试月度档口比例"},
                         },
                         "data_gaps": [],
                     },
@@ -69,6 +70,13 @@ class MonthlyMeetingReportHtmlTest(unittest.TestCase):
             write_csv(input_dir / "store_driver_summary.csv", [{"门店名称": "麦家小馆（甲店）", "basis": "环比"}])
             write_csv(input_dir / "monthly_store_channel_metrics.csv", [{"period": "本月", "门店名称": "麦家小馆（甲店）", "channel": "堂食", "net_revenue": 300}])
             write_csv(input_dir / "monthly_store_daypart_metrics.csv", [{"period": "本月", "门店名称": "麦家小馆（甲店）", "餐段": "午餐", "时段": "12", "net_revenue": 300}])
+            write_csv(
+                input_dir / "monthly_store_stall_sales_mix.csv",
+                [
+                    {"period_key": "current", "period_label": "本月", "门店名称": "全体门店", "档口": "热菜", "stall_income": 250, "quantity": 20, "dine_in_revenue": 300, "share": 5 / 6},
+                    {"period_key": "current", "period_label": "本月", "门店名称": "全体门店", "档口": "未匹配", "stall_income": 50, "quantity": 3, "dine_in_revenue": 300, "share": 1 / 6},
+                ],
+            )
 
             payload = report.build_payload(input_dir, "麦家小馆")
 
@@ -76,6 +84,10 @@ class MonthlyMeetingReportHtmlTest(unittest.TestCase):
         self.assertEqual(payload["kpis"]["wow_pct"], 0.5)
         self.assertEqual(payload["kpis"]["yoy_pct"], 1.0)
         self.assertEqual(payload["meta"]["revenue_basis"], report.REVENUE_BASIS_NOTE)
+        self.assertTrue(payload["stall_sales_mix"]["enabled"])
+        self.assertEqual(payload["stall_sales_mix"]["entities"][0]["rows"][0]["name"], "热菜")
+        self.assertEqual(payload["stall_sales_mix"]["entities"][0]["rows"][1]["name"], "未匹配")
+        self.assertTrue(payload["stall_sales_mix"]["entities"][0]["rows"][1]["is_unmatched"])
 
 
 if __name__ == "__main__":
