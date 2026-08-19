@@ -172,7 +172,7 @@ def build_trend_comparison_entities(rows: list[dict[str, Any]]) -> list[dict[str
     return entities
 
 
-def build_dish_sales_mix_payload(rows: list[dict[str, Any]], meta: dict[str, Any]) -> dict[str, Any]:
+def build_stall_sales_mix_payload(rows: list[dict[str, Any]], meta: dict[str, Any]) -> dict[str, Any]:
     current_rows = [
         row for row in rows
         if row.get("period_key") == "current" or row.get("period_label") in {"本周", "本月"}
@@ -186,36 +186,50 @@ def build_dish_sales_mix_payload(rows: list[dict[str, Any]], meta: dict[str, Any
     def build_entity(entity_rows: list[dict[str, Any]], label: str) -> dict[str, Any] | None:
         positive_rows = [
             row for row in entity_rows
-            if float(row.get("dish_income") or 0) > 0
+            if float(row.get("stall_income") or 0) > 0
         ]
         if not positive_rows:
             return None
         denominator = max(float(row.get("dine_in_revenue") or 0) for row in entity_rows)
-        total_income = sum(float(row.get("dish_income") or 0) for row in positive_rows)
+        total_income = sum(float(row.get("stall_income") or 0) for row in positive_rows)
         total = denominator if denominator > 0 else total_income
         if total <= 0:
             return None
-        sorted_rows = sorted(positive_rows, key=lambda row: float(row.get("dish_income") or 0), reverse=True)
+        unmatched_rows = [row for row in positive_rows if str(row.get("档口") or "") == "未匹配"]
+        matched_rows = [row for row in positive_rows if str(row.get("档口") or "") != "未匹配"]
+        sorted_rows = sorted(matched_rows, key=lambda row: float(row.get("stall_income") or 0), reverse=True)
         top_rows = sorted_rows[:10]
-        top_total = sum(float(row.get("dish_income") or 0) for row in top_rows)
         values = [
             {
-                "name": str(row.get("菜品名称") or "未知菜品"),
-                "value": round(float(row.get("dish_income") or 0), 2),
+                "name": str(row.get("档口") or "未分类"),
+                "value": round(float(row.get("stall_income") or 0), 2),
                 "quantity": round(float(row.get("quantity") or 0), 2),
-                "share": round(float(row.get("dish_income") or 0) / total, 6),
+                "share": round(float(row.get("stall_income") or 0) / total, 6),
                 "is_other": False,
+                "is_unmatched": False,
             }
             for row in top_rows
         ]
-        other_value = max(0.0, total - top_total)
+        unmatched_value = sum(float(row.get("stall_income") or 0) for row in unmatched_rows)
+        if unmatched_value > 0.01:
+            values.append({
+                "name": "未匹配",
+                "value": round(unmatched_value, 2),
+                "quantity": round(sum(float(row.get("quantity") or 0) for row in unmatched_rows), 2),
+                "share": round(unmatched_value / total, 6),
+                "is_other": False,
+                "is_unmatched": True,
+            })
+        other_rows = sorted_rows[10:]
+        other_value = sum(float(row.get("stall_income") or 0) for row in other_rows)
         if other_value > 0.01:
             values.append({
                 "name": "其他",
                 "value": round(other_value, 2),
-                "quantity": None,
+                "quantity": round(sum(float(row.get("quantity") or 0) for row in other_rows), 2),
                 "share": round(other_value / total, 6),
                 "is_other": True,
+                "is_unmatched": False,
             })
         return {
             "key": entity_key(label),
@@ -400,7 +414,7 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
     stall_drivers = read_optional_csv(input_dir / "weekly_store_stall_driver_summary.csv")
     dish_drivers = read_optional_csv(input_dir / "weekly_store_stall_dish_drivers.csv")
     match_summary = metric_lookup(read_optional_csv(input_dir / "dish_catalog_match_summary.csv"))
-    dish_sales_mix = read_optional_csv(input_dir / "weekly_store_dish_sales_mix.csv")
+    stall_sales_mix = read_optional_csv(input_dir / "weekly_store_stall_sales_mix.csv")
 
     segment_by_store = {row["门店名称"]: row for row in segments}
     driver_by_store = {
@@ -516,7 +530,7 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
         "drivers": [row for row in drivers if row.get("basis") == "环比"],
         "segments": segments,
         "channel_by_store": channel_by_store,
-        "dish_sales_mix": build_dish_sales_mix_payload(dish_sales_mix, summary["meta"].get("dish_sales_mix", {})),
+        "stall_sales_mix": build_stall_sales_mix_payload(stall_sales_mix, summary["meta"].get("stall_sales_mix", {})),
         "dayparts": aggregate_dayparts([row for row in dayparts if row.get("period") in {"本周", "环比周"}]),
         "hourly_revenue_entities": aggregate_hourly_revenue_entities(dayparts),
         "trend": aggregate_trend(weekly, current_window_end),
@@ -755,7 +769,7 @@ HTML_TEMPLATE = r'''<!doctype html>
         <a href="#ranking">横向对比</a>
         <a href="#stores">门店明细</a>
         <a href="#channels">堂食外卖</a>
-        <a href="#dish-mix">菜品比例</a>
+        <a href="#stall-mix">档口占比</a>
         <a href="#drivers">归因</a>
         <a href="#stall-drivers">档口归因</a>
         <a href="#daypart-drivers">时段归因</a>
@@ -863,22 +877,22 @@ HTML_TEMPLATE = r'''<!doctype html>
       </div>
     </section>
 
-    <section class="section" id="dish-mix">
+    <section class="section" id="stall-mix">
       <div class="section-head">
-        <div><div class="kicker">05 Dish Sales Mix</div><h2>销售额菜品比例：店内营业收入由哪些菜品构成</h2></div>
-        <p class="note">只看店内销售口径：分母为营业分组表“店内营业收入”，分子为菜品主题数据“菜品收入”。</p>
+        <div><div class="kicker">05 Stall Sales Mix</div><h2>档口占比：店内营业收入由哪些档口构成</h2></div>
+        <p class="note">只看店内销售：分母为营业分组表“店内营业收入”；分子为双名称匹配后归入各档口的“菜品收入”合计，无法匹配的收入单列为“未匹配”。</p>
       </div>
       <div class="grid-2">
         <div class="panel">
           <div class="panel-head">
-            <div class="panel-title-row"><h3>Top 10 菜品占比</h3><select id="dishMixStoreSelect" class="mini-select" aria-label="选择门店菜品比例"></select></div>
-            <span class="label" id="dishMixTotalLabel">本周店内营业收入</span>
+            <div class="panel-title-row"><h3>Top 10 档口占比</h3><select id="stallMixStoreSelect" class="mini-select" aria-label="选择门店档口占比"></select></div>
+            <span class="label" id="stallMixTotalLabel">本周店内营业收入</span>
           </div>
-          <div class="chart" id="dishMixPie"></div>
+          <div class="chart" id="stallMixPie"></div>
         </div>
         <div class="panel">
-          <div class="panel-head"><h3>菜品占比明细</h3><span class="label">Top 10 + 其他</span></div>
-          <div class="table-wrap"><table class="compact-table" id="dishMixTable"><thead><tr><th>菜品</th><th>店内收入</th><th>占比</th><th>数量</th></tr></thead><tbody></tbody></table></div>
+          <div class="panel-head"><h3>档口占比明细</h3><span class="label">Top 10 + 未匹配 + 其他</span></div>
+          <div class="table-wrap"><table class="compact-table" id="stallMixTable"><thead><tr><th>档口</th><th>档口收入</th><th>占比</th><th>数量</th></tr></thead><tbody></tbody></table></div>
         </div>
       </div>
     </section>
@@ -947,8 +961,8 @@ HTML_TEMPLATE = r'''<!doctype html>
     const segmentGroups = data.segment_groups || [];
     let selectedTrendKey = '__all__';
     let selectedHourlyKey = '__all__';
-    let selectedDishMixKey = '__all__';
-    const dishPalette = ['#006d77', '#2f5b9f', '#3a7d44', '#b85c00', '#7557a6', '#d96b3b', '#b23a48', '#c89b18', '#4b5563', '#0f766e', '#9aa7b5'];
+    let selectedStallMixKey = '__all__';
+    const stallPalette = ['#006d77', '#2f5b9f', '#3a7d44', '#b85c00', '#7557a6', '#d96b3b', '#b23a48', '#c89b18', '#4b5563', '#0f766e', '#9aa7b5'];
     const currentTrendYear = String(data.meta?.target_windows?.current?.end || '').slice(0, 4) || '本年';
     const yoyTrendYear = String(data.meta?.target_windows?.yoy?.end || '').slice(0, 4) || '同期';
 
@@ -1411,24 +1425,24 @@ HTML_TEMPLATE = r'''<!doctype html>
       el.innerHTML = '';
       el.appendChild(root);
     }
-    function currentDishMixEntity() {
-      const entities = data.dish_sales_mix?.entities || [];
-      return entities.find(item => item.key === selectedDishMixKey) || entities[0];
+    function currentStallMixEntity() {
+      const entities = data.stall_sales_mix?.entities || [];
+      return entities.find(item => item.key === selectedStallMixKey) || entities[0];
     }
-    function renderDishMixSelector() {
-      const select = document.getElementById('dishMixStoreSelect');
+    function renderStallMixSelector() {
+      const select = document.getElementById('stallMixStoreSelect');
       if (!select) return;
-      const entities = data.dish_sales_mix?.entities || [];
+      const entities = data.stall_sales_mix?.entities || [];
       if (!entities.length) {
         select.innerHTML = '';
         return;
       }
       select.innerHTML = entities.map(item => `<option value="${item.key}">${cleanName(item.label)}</option>`).join('');
-      if (!entities.some(item => item.key === selectedDishMixKey)) selectedDishMixKey = entities[0].key;
-      select.value = selectedDishMixKey;
+      if (!entities.some(item => item.key === selectedStallMixKey)) selectedStallMixKey = entities[0].key;
+      select.value = selectedStallMixKey;
       select.addEventListener('change', () => {
-        selectedDishMixKey = select.value;
-        renderDishSalesMix();
+        selectedStallMixKey = select.value;
+        renderStallSalesMix();
       });
     }
     function describeArc(cx, cy, rOuter, rInner, startAngle, endAngle) {
@@ -1445,19 +1459,19 @@ HTML_TEMPLATE = r'''<!doctype html>
         'Z'
       ].join(' ');
     }
-    function renderDishSalesMix() {
-      const pie = document.getElementById('dishMixPie');
-      const tableBody = document.querySelector('#dishMixTable tbody');
-      const label = document.getElementById('dishMixTotalLabel');
-      const mix = data.dish_sales_mix || {};
+    function renderStallSalesMix() {
+      const pie = document.getElementById('stallMixPie');
+      const tableBody = document.querySelector('#stallMixTable tbody');
+      const label = document.getElementById('stallMixTotalLabel');
+      const mix = data.stall_sales_mix || {};
       if (!mix.enabled) {
-        const reason = mix.meta?.reason || '未提供菜品主题数据，未生成销售额菜品比例。';
+        const reason = mix.meta?.reason || '档口占比需要同时提供菜品主题数据和菜品库。';
         pie.innerHTML = `<div class="callout">${reason}</div>`;
         if (tableBody) tableBody.innerHTML = '';
         if (label) label.textContent = '本周店内营业收入';
         return;
       }
-      const entity = currentDishMixEntity();
+      const entity = currentStallMixEntity();
       if (!entity) return;
       const rows = entity.rows || [];
       if (label) label.textContent = `${cleanName(entity.label)}店内营业收入 ${fmtWan(entity.total)}`;
@@ -1471,7 +1485,7 @@ HTML_TEMPLATE = r'''<!doctype html>
         const value = Number(row.value || 0);
         const angle = (value / Math.max(entity.total, 1)) * Math.PI * 2;
         const end = start + angle;
-        const fill = dishPalette[index % dishPalette.length];
+        const fill = stallPalette[index % stallPalette.length];
         if (angle > 0.0001) {
           const slice = svg('path', {
             d: describeArc(cx, cy, rOuter, rInner, start, end),
@@ -1494,7 +1508,7 @@ HTML_TEMPLATE = r'''<!doctype html>
       const legendX = 390;
       rows.forEach((row, index) => {
         const y = 42 + index * 25;
-        root.appendChild(svg('rect', {x:legendX, y:y-10, width:11, height:11, rx:2, fill:dishPalette[index % dishPalette.length]}));
+        root.appendChild(svg('rect', {x:legendX, y:y-10, width:11, height:11, rx:2, fill:stallPalette[index % stallPalette.length]}));
         const name = String(row.name || '').length > 18 ? `${String(row.name).slice(0, 18)}...` : row.name;
         root.appendChild(svg('text', {x:legendX+18, y:y, 'font-size':'12', fill:'#344054', 'font-weight':'700'})).textContent = name;
         root.appendChild(svg('text', {x:w-28, y:y, 'text-anchor':'end', 'font-size':'12', fill:'#657386'})).textContent = fmtPct(row.share);
@@ -1506,7 +1520,7 @@ HTML_TEMPLATE = r'''<!doctype html>
       if (tableBody) {
         tableBody.innerHTML = rows.map((row, index) => `
           <tr>
-            <td><span class="swatch" style="background:${dishPalette[index % dishPalette.length]}"></span>${row.name}</td>
+            <td><span class="swatch" style="background:${stallPalette[index % stallPalette.length]}"></span>${row.name}</td>
             <td>${fmtWan(row.value)}</td>
             <td>${fmtPct(row.share)}</td>
             <td>${row.quantity === null || row.quantity === undefined ? '-' : fmtNum(row.quantity)}</td>
@@ -1773,8 +1787,8 @@ HTML_TEMPLATE = r'''<!doctype html>
     renderTable();
     renderMixBars();
     renderPlatformBars();
-    renderDishMixSelector();
-    renderDishSalesMix();
+    renderStallMixSelector();
+    renderStallSalesMix();
     renderDriverBar();
     renderActions();
     renderStallAttribution();
