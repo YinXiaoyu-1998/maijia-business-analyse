@@ -116,7 +116,9 @@ Weekly meeting reports can also show `档口归因` as an independent section al
 
 Use this exact口径:
 
-- Grouping: map `菜品主题数据.菜品名称` to the dish catalog's `总部菜品.基础分类`; display that基础分类 as `档口`.
+- Grouping: resolve each dish row against the dish catalog's `总部菜品.菜品名称`, then display the matched `总部菜品.基础分类` as `档口`.
+- Name priority: first try `菜品主题数据.菜品名称`. If it does not resolve to exactly one基础分类, try `菜品主题数据.关联菜品名称`, which is the linked canonical dish name. If the display name already resolves, preserve that result even when the linked name resolves to a different基础分类; this prevents existing specific-stall matches from being reclassified as generic categories such as `外卖品项`.
+- Match audit: write primary-name matches, linked-name rescues, unmatched rows, ambiguous rows, and the overall match rate to `dish_catalog_match_summary.csv`. A row rescued through `关联菜品名称` is a normal matched row, not `未匹配菜品库`.
 - Metric: aggregate `菜品主题数据.菜品收入` by `门店名称 + 档口`, then compare the report's 本周, 环比周, and 同比周.
 - Detail: for each store and comparison basis, show the largest negative档口, largest positive档口, and representative菜品 driving each side.
 - Data requirement: dish exports must cover the current week, previous comparison week, and YoY week for complete 环比/同比 stall attribution. The profiler can accept multiple `maijia_dishes_YYYYMMDD_YYYYMMDD.xlsx` files and skip out-of-scope ranges.
@@ -287,7 +289,7 @@ Weekly meeting fact tables:
 - `weekly_store_stall_comparison.csv` when stall attribution is enabled; compares 本周 / 环比周 / 同比周 by `门店名称 + 档口`
 - `weekly_store_stall_driver_summary.csv` when stall attribution is enabled; stores each store's largest negative and positive档口 by 环比 and 同比
 - `weekly_store_stall_dish_drivers.csv` when stall attribution is enabled; representative菜品 for each selected档口 driver
-- `dish_catalog_match_summary.csv` when stall attribution is enabled; catalog match rate, unmatched rows, ambiguous rows, and catalog size
+- `dish_catalog_match_summary.csv` when stall attribution is enabled; primary-name matches, linked-name rescues, catalog match rate, unmatched rows, ambiguous rows, and catalog size
 - `weekly_store_dish_sales_mix.csv` when `--dish-input` is provided; stores current-period dish收入 and店内营业收入 shares for `全体门店` and each store
 - `weekly_trend_comparison_metrics.csv`
 - `weekly_store_comparison.csv`

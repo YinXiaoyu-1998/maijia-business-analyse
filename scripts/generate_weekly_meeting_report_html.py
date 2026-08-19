@@ -1643,7 +1643,7 @@ HTML_TEMPLATE = r'''<!doctype html>
       root.innerHTML = `
         ${coverageNote}
         <div class="grid-3">
-          <div class="card"><div class="label">菜品行匹配率</div><div class="value">${fmtPct(match.match_rate)}</div><div class="foot">未匹配 ${fmtNum(match.unmatched_rows)} / 重名 ${fmtNum(match.ambiguous_rows)}</div></div>
+          <div class="card"><div class="label">菜品行匹配率</div><div class="value">${fmtPct(match.match_rate)}</div><div class="foot">关联名称补齐 ${fmtNum(match.linked_name_rescued_rows)} / 未匹配 ${fmtNum(match.unmatched_rows)} / 重名 ${fmtNum(match.ambiguous_rows)}</div></div>
           <div class="card"><div class="label">菜品库规模</div><div class="value">${fmtNum(match.catalog_rows)}</div><div class="foot">基础分类档口 ${fmtNum(match.catalog_stall_count)} 个</div></div>
           <div class="card"><div class="label">归因口径</div><div class="value">环比 + 同比</div><div class="foot">按菜品收入变化排序</div></div>
         </div>
