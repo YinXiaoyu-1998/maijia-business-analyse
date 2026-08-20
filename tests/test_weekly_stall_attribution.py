@@ -77,6 +77,88 @@ class WeeklyStallAttributionTest(unittest.TestCase):
         self.assertEqual(status, "unmatched")
         self.assertEqual(source, "none")
 
+    def test_product_sales_per_10k_uses_linked_name_and_matching_all_channel_scope(self) -> None:
+        catalog = self.catalog_for({
+            "蒜蓉生蚝": "海鲜",
+            "鸡翅": "烧烤",
+        })
+        dish_rows = [
+            {
+                "门店": "甲店",
+                "菜品名称": "蒜蓉生蚝特惠",
+                "关联菜品名称": "蒜蓉生蚝",
+                "订单分类": "店内销售",
+                "菜品销售数量": "12",
+            },
+            {
+                "门店": "甲店",
+                "菜品名称": "标准生蚝",
+                "关联菜品名称": "蒜蓉生蚝",
+                "订单分类": "外卖",
+                "菜品销售数量": "8",
+            },
+            {
+                "门店": "乙店",
+                "菜品名称": "鸡翅",
+                "关联菜品名称": "",
+                "订单分类": "自提",
+                "菜品销售数量": "5",
+            },
+        ]
+        revenue = {
+            ("current", "甲店"): 10_000,
+            ("current", "乙店"): 5_000,
+            ("current", profile.ALL_STORES_LABEL): 15_000,
+        }
+
+        rows = profile.aggregate_product_sales_per_10k_rows(
+            dish_rows,
+            catalog,
+            revenue,
+            period_key="current",
+            period_label="当前区间",
+        )
+
+        by_key = {(row["门店名称"], row["产品名称"]): row for row in rows}
+        oysters = by_key[("甲店", "蒜蓉生蚝")]
+        self.assertEqual(oysters["档口"], "海鲜")
+        self.assertEqual(oysters["quantity"], 20)
+        self.assertEqual(oysters["order_revenue"], 10_000)
+        self.assertEqual(oysters["units_per_10k"], 20)
+        self.assertEqual(
+            set(oysters["search_names"].split("\u001f")),
+            {"蒜蓉生蚝", "蒜蓉生蚝特惠", "标准生蚝"},
+        )
+
+        fallback = by_key[("乙店", "鸡翅")]
+        self.assertEqual(fallback["档口"], "烧烤")
+        self.assertEqual(fallback["units_per_10k"], 10)
+
+        all_oysters = by_key[(profile.ALL_STORES_LABEL, "蒜蓉生蚝")]
+        self.assertEqual(all_oysters["quantity"], 20)
+        self.assertAlmostEqual(all_oysters["units_per_10k"], 20 / 15_000 * 10_000, places=4)
+
+    def test_product_sales_per_10k_marks_conflicting_or_missing_stalls_unmatched(self) -> None:
+        catalog = self.catalog_for({
+            "展示名甲": "档口甲",
+            "展示名乙": "档口乙",
+        })
+        rows = profile.aggregate_product_sales_per_10k_rows(
+            [
+                {"门店": "甲店", "菜品名称": "展示名甲", "关联菜品名称": "统一产品", "菜品销售数量": "2"},
+                {"门店": "甲店", "菜品名称": "展示名乙", "关联菜品名称": "统一产品", "菜品销售数量": "3"},
+                {"门店": "甲店", "菜品名称": "无库产品", "关联菜品名称": "", "菜品销售数量": "1"},
+            ],
+            catalog,
+            {("current", "甲店"): 10_000, ("current", profile.ALL_STORES_LABEL): 10_000},
+            period_key="current",
+            period_label="当前区间",
+        )
+
+        by_name = {row["产品名称"]: row for row in rows if row["门店名称"] == "甲店"}
+        self.assertEqual(by_name["统一产品"]["档口"], "未匹配")
+        self.assertEqual(by_name["无库产品"]["档口"], "未匹配")
+
 
 if __name__ == "__main__":
     unittest.main()

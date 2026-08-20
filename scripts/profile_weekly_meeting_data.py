@@ -231,6 +231,18 @@ STALL_SALES_MIX_FIELDS = [
     "share",
 ]
 
+PRODUCT_SALES_PER_10K_FIELDS = [
+    "period_key",
+    "period_label",
+    "门店名称",
+    "产品名称",
+    "档口",
+    "quantity",
+    "order_revenue",
+    "units_per_10k",
+    "search_names",
+]
+
 STORE_SIZE_BUCKETS = {
     "小店": {"龙玥城店", "文化园店", "苏州街店", "常营店", "通州保利店"},
     "大店": {"荣京道店", "经海路店", "国粹苑店", "上海沙龙店"},
@@ -1386,21 +1398,113 @@ def build_dine_in_revenue_map(target_rows: list[dict[str, Any]]) -> dict[tuple[s
     return dict(revenue_by_period_store)
 
 
+def build_order_revenue_map(target_rows: list[dict[str, Any]]) -> dict[tuple[str, str], float]:
+    revenue_by_period_store: dict[tuple[str, str], float] = defaultdict(float)
+    for row in target_rows:
+        period_key = str(row.get("period_key") or "")
+        store = str(row.get("门店名称") or "")
+        if not period_key or not store:
+            continue
+        revenue = safe_float(row.get("net_revenue"))
+        revenue_by_period_store[(period_key, store)] += revenue
+        revenue_by_period_store[(period_key, ALL_STORES_LABEL)] += revenue
+    return dict(revenue_by_period_store)
+
+
+def new_product_sales_agg() -> dict[str, Any]:
+    return {"quantity": 0.0, "search_names": set(), "matched_stalls": set()}
+
+
+def add_product_sales_observation(
+    groups: dict[tuple[str, str], dict[str, Any]],
+    row: dict[str, Any],
+    catalog: dict[str, Any],
+) -> None:
+    store = str(row.get("门店") or "未知门店").strip() or "未知门店"
+    dish_name = str(row.get("菜品名称") or "").strip()
+    linked_dish_name = str(row.get("关联菜品名称") or "").strip()
+    product_name = linked_dish_name or dish_name or "未知菜品"
+    quantity = safe_float(row.get("菜品销售数量"))
+    stall, status, _source = resolve_stall_from_names(dish_name, linked_dish_name, catalog)
+
+    for entity in (store, ALL_STORES_LABEL):
+        agg = groups.setdefault((entity, product_name), new_product_sales_agg())
+        agg["quantity"] += quantity
+        agg["search_names"].update(name for name in (product_name, dish_name, linked_dish_name) if name)
+        if status == "matched":
+            agg["matched_stalls"].add(stall)
+
+
+def finalize_product_sales_per_10k_rows(
+    groups: dict[tuple[str, str], dict[str, Any]],
+    revenue_by_period_store: dict[tuple[str, str], float],
+    period_key: str,
+    period_label: str,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for (store, product_name), agg in groups.items():
+        quantity = float(agg["quantity"])
+        denominator = revenue_by_period_store.get((period_key, store), 0.0)
+        stalls = set(agg["matched_stalls"])
+        rows.append({
+            "period_key": period_key,
+            "period_label": period_label,
+            "门店名称": store,
+            "产品名称": product_name,
+            "档口": next(iter(stalls)) if len(stalls) == 1 else UNMATCHED_STALL_MIX_LABEL,
+            "quantity": fmt(quantity, 2),
+            "order_revenue": fmt(denominator, 2),
+            "units_per_10k": fmt(safe_div(quantity, denominator) * 10000 if denominator else None, 4),
+            "search_names": "\u001f".join(sorted(agg["search_names"])),
+        })
+    rows.sort(key=lambda row: (
+        str(row["门店名称"]),
+        -float(row.get("units_per_10k") or 0),
+        str(row["产品名称"]),
+    ))
+    return rows
+
+
+def aggregate_product_sales_per_10k_rows(
+    dish_rows: Iterable[dict[str, Any]],
+    catalog: dict[str, Any],
+    revenue_by_period_store: dict[tuple[str, str], float],
+    period_key: str,
+    period_label: str,
+) -> list[dict[str, Any]]:
+    groups: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in dish_rows:
+        add_product_sales_observation(groups, row, catalog)
+    return finalize_product_sales_per_10k_rows(
+        groups,
+        revenue_by_period_store,
+        period_key,
+        period_label,
+    )
+
+
 def profile_stall_sales_mix(
     dish_inputs: list[Path] | None,
     catalog_path: Path | None,
     output_dir: Path,
     target_windows: dict[str, tuple[str, date, date]],
     dine_in_revenue_by_period_store: dict[tuple[str, str], float],
+    order_revenue_by_period_store: dict[tuple[str, str], float],
     output_prefix: str = "weekly",
 ) -> dict[str, Any]:
     output_name = f"{output_prefix}_store_stall_sales_mix.csv"
+    product_output_name = f"{output_prefix}_store_product_sales_per_10k.csv"
     if not dish_inputs or not catalog_path:
         progress("缺少菜品主题数据或菜品库，跳过档口占比。")
         return {
             "enabled": False,
             "reason": "档口占比需要同时提供菜品主题数据和菜品库。",
             "outputs": [],
+            "product_sales_per_10k": {
+                "enabled": False,
+                "reason": "产品万元销量需要同时提供菜品主题数据和菜品库。",
+                "outputs": [],
+            },
         }
 
     catalog = load_catalog(catalog_path)
@@ -1422,6 +1526,7 @@ def profile_stall_sales_mix(
     later_dates = list(reversed(later_dates))
 
     groups: dict[tuple[str, str, str, str], dict[str, Any]] = defaultdict(new_dish_agg)
+    product_groups: dict[tuple[str, str], dict[str, Any]] = {}
     period_counts: dict[str, int] = defaultdict(int)
     period_dates: dict[str, set[date]] = defaultdict(set)
     income_by_period_store: dict[tuple[str, str], float] = defaultdict(float)
@@ -1474,6 +1579,8 @@ def profile_stall_sales_mix(
             if not period_key:
                 skipped_out_of_scope_rows += 1
                 continue
+            if period_key == "current":
+                add_product_sales_observation(product_groups, row, catalog)
             if str(row.get("订单分类") or "").strip() != DINE_IN_DISH_CHANNEL:
                 skipped_non_dine_in_rows += 1
                 continue
@@ -1531,6 +1638,24 @@ def profile_stall_sales_mix(
     write_csv(output_dir / output_name, rows, STALL_SALES_MIX_FIELDS)
     progress(f"写出档口占比: {output_name} rows={len(rows):,}")
 
+    current_label = target_windows["current"][0]
+    product_rows = finalize_product_sales_per_10k_rows(
+        product_groups,
+        order_revenue_by_period_store,
+        "current",
+        current_label,
+    )
+    write_csv(output_dir / product_output_name, product_rows, PRODUCT_SALES_PER_10K_FIELDS)
+    progress(f"写出产品万元销量: {product_output_name} rows={len(product_rows):,}")
+
+    product_meta = {
+        "enabled": bool(product_rows) and order_revenue_by_period_store.get(("current", ALL_STORES_LABEL), 0.0) > 0,
+        "basis": "分母=所选门店、当前统计区间、全部渠道的营业分组表「订单营业收入」；分子=同范围菜品主题数据「菜品销售数量」；关联菜品名称优先，缺失时回退菜品名称。",
+        "processed_rows": sum(1 for row in product_rows if row.get("门店名称") != ALL_STORES_LABEL),
+        "current_business_order_revenue": fmt(order_revenue_by_period_store.get(("current", ALL_STORES_LABEL), 0.0), 2),
+        "outputs": [product_output_name],
+    }
+
     current_key = "current"
     current_revenue = dine_in_revenue_by_period_store.get((current_key, ALL_STORES_LABEL), 0.0)
     current_income = income_by_period_store.get((current_key, ALL_STORES_LABEL), 0.0)
@@ -1577,7 +1702,8 @@ def profile_stall_sales_mix(
             }
             for key, (label, _start, _end) in target_windows.items()
         },
-        "outputs": [output_name],
+        "outputs": [output_name, product_output_name],
+        "product_sales_per_10k": product_meta,
     }
 
 
@@ -1808,6 +1934,7 @@ def profile(
         output_dir,
         target_windows,
         build_dine_in_revenue_map(target_rows),
+        build_order_revenue_map(target_rows),
         output_prefix="weekly",
     )
 
@@ -1887,6 +2014,7 @@ def profile(
             },
             "stall_attribution": stall_attribution_meta,
             "stall_sales_mix": stall_sales_mix_meta,
+            "product_sales_per_10k": stall_sales_mix_meta.get("product_sales_per_10k", {}),
         },
         "comparison": comparison_rows,
         "drivers": driver_rows,
@@ -1901,6 +2029,10 @@ def profile(
             *(
                 [stall_sales_mix_meta.get("reason", "缺少菜品主题数据或菜品库，未生成档口占比。")]
                 if not stall_sales_mix_meta.get("enabled") else []
+            ),
+            *(
+                [stall_sales_mix_meta.get("product_sales_per_10k", {}).get("reason", "缺少菜品主题数据或菜品库，未生成产品万元销量。")]
+                if not stall_sales_mix_meta.get("product_sales_per_10k", {}).get("enabled") else []
             ),
             *(
                 [stall_attribution_meta.get("reason", "未生成档口归因。")]

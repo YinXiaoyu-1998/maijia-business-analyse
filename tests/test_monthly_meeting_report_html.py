@@ -44,6 +44,7 @@ class MonthlyMeetingReportHtmlTest(unittest.TestCase):
                             "store_count": 1,
                             "outputs": [],
                             "stall_sales_mix": {"enabled": True, "basis": "测试月度档口比例"},
+                            "product_sales_per_10k": {"enabled": True, "basis": "测试月度产品万元销量"},
                         },
                         "data_gaps": [],
                     },
@@ -77,6 +78,22 @@ class MonthlyMeetingReportHtmlTest(unittest.TestCase):
                     {"period_key": "current", "period_label": "本月", "门店名称": "全体门店", "档口": "未匹配", "stall_income": 50, "quantity": 3, "dine_in_revenue": 300, "share": 1 / 6},
                 ],
             )
+            write_csv(
+                input_dir / "monthly_store_product_sales_per_10k.csv",
+                [
+                    {
+                        "period_key": "current",
+                        "period_label": "本月",
+                        "门店名称": "全体门店",
+                        "产品名称": "蒜蓉生蚝",
+                        "档口": "海鲜",
+                        "quantity": 18,
+                        "order_revenue": 300,
+                        "units_per_10k": 600,
+                        "search_names": "蒜蓉生蚝\u001f生蚝特惠",
+                    }
+                ],
+            )
 
             payload = report.build_payload(input_dir, "麦家小馆")
 
@@ -88,6 +105,9 @@ class MonthlyMeetingReportHtmlTest(unittest.TestCase):
         self.assertEqual(payload["stall_sales_mix"]["entities"][0]["rows"][0]["name"], "热菜")
         self.assertEqual(payload["stall_sales_mix"]["entities"][0]["rows"][1]["name"], "未匹配")
         self.assertTrue(payload["stall_sales_mix"]["entities"][0]["rows"][1]["is_unmatched"])
+        self.assertTrue(payload["product_sales_per_10k"]["enabled"])
+        self.assertEqual(payload["product_sales_per_10k"]["entities"][0]["rows"][0]["name"], "蒜蓉生蚝")
+        self.assertEqual(payload["product_sales_per_10k"]["entities"][0]["rows"][0]["units_per_10k"], 600)
 
 
 if __name__ == "__main__":
