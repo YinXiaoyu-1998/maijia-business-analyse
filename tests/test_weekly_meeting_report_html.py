@@ -394,6 +394,7 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
                 "period_label": "当前区间",
                 "门店名称": "全体门店",
                 "产品名称": f"产品{index}",
+                "销售分类": "堂食" if index % 2 else "外卖",
                 "档口": "热菜",
                 "quantity": index,
                 "order_revenue": 10_000,
@@ -411,6 +412,7 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
         self.assertEqual(payload["entities"][0]["key"], "__all__")
         self.assertEqual(len(payload["entities"][0]["rows"]), 12)
         self.assertEqual(payload["entities"][0]["rows"][0]["name"], "产品12")
+        self.assertEqual(payload["entities"][0]["rows"][0]["sales_class"], "外卖")
         self.assertIn("别名12", payload["entities"][0]["rows"][0]["search_names"])
 
         gross_payload = report.build_product_sales_per_10k_payload(
@@ -445,12 +447,31 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
         self.assertFalse(payload["enabled"])
         self.assertIn("重新运行 profiling", payload["meta"]["reason"])
 
+    def test_product_sales_payload_disables_fact_schema_without_sales_class(self) -> None:
+        rows = [
+            {
+                "period_key": "current",
+                "门店名称": "全体门店",
+                "产品名称": "旧版产品",
+                "quantity": 10,
+                "order_revenue": 10_000,
+                "units_per_10k": 10,
+            }
+        ]
+
+        payload = report.build_product_sales_per_10k_payload(rows, {"enabled": True})
+
+        self.assertFalse(payload["enabled"])
+        self.assertIn("销售分类", payload["meta"]["reason"])
+        self.assertIn("重新运行 profiling", payload["meta"]["reason"])
+
     def test_product_sales_per_10k_payload_marks_zero_denominator_store_unavailable(self) -> None:
         rows = [
             {
                 "period_key": "current",
                 "门店名称": "全体门店",
                 "产品名称": "产品甲",
+                "销售分类": "堂食",
                 "quantity": 10,
                 "gross_sales": 20_000,
                 "units_per_10k_gross_sales": 5,
@@ -459,6 +480,7 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
                 "period_key": "current",
                 "门店名称": "零分母店",
                 "产品名称": "产品甲",
+                "销售分类": "堂食",
                 "quantity": 10,
                 "gross_sales": 0,
                 "units_per_10k_gross_sales": "",
@@ -485,6 +507,7 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
                 "period_key": "current",
                 "门店名称": "全体门店",
                 "产品名称": "产品甲",
+                "销售分类": "堂食",
                 "quantity": 10,
                 "gross_sales": 0,
                 "units_per_10k_gross_sales": "",
@@ -515,6 +538,7 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
         self.assertIn("productSalesPer10kGrossStoreSelect", report.HTML_TEMPLATE)
         self.assertIn("productSalesPer10kGrossSearch", report.HTML_TEMPLATE)
         self.assertIn("productSalesPer10kGrossTable", report.HTML_TEMPLATE)
+        self.assertGreaterEqual(report.HTML_TEMPLATE.count("<th>销售分类</th>"), 2)
 
     def test_template_clamps_chart_tooltips_inside_chart_container(self) -> None:
         self.assertIn("function positionTooltip", report.HTML_TEMPLATE)

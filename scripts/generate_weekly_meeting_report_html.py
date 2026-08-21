@@ -269,6 +269,13 @@ def build_product_sales_per_10k_payload(
             "reason": f"事实表缺少{denominator_label}口径字段，请重新运行 profiling 后生成报告。",
         }
         return {"enabled": False, "meta": unavailable_meta, "entities": []}
+    if not all("销售分类" in row for row in current_rows):
+        unavailable_meta = {
+            **meta,
+            "enabled": False,
+            "reason": "事实表缺少销售分类字段，请重新运行 profiling 后生成报告。",
+        }
+        return {"enabled": False, "meta": unavailable_meta, "entities": []}
 
     stores = sorted({str(row.get("门店名称") or "") for row in current_rows if row.get("门店名称")})
     ordered_stores = [store for store in ["全体门店"] if store in stores] + [store for store in stores if store != "全体门店"]
@@ -290,6 +297,7 @@ def build_product_sales_per_10k_payload(
             "rows": [
                 {
                     "name": str(row.get("产品名称") or "未知菜品"),
+                    "sales_class": str(row.get("销售分类") or "外卖"),
                     "stall": str(row.get("档口") or "未匹配"),
                     "quantity": round(float(row.get("quantity") or 0), 2),
                     "units_per_10k": (
@@ -989,7 +997,7 @@ HTML_TEMPLATE = r'''<!doctype html>
     <section class="section" id="product-sales-per-10k">
       <div class="section-head">
         <div><div class="kicker">06 Product Sales per ¥10K</div><h2>产品万元销量：双口径预测与要货参考</h2></div>
-        <p class="note">两个板块共用同一门店、同一当前统计区间、全部渠道的菜品销量；仅分母分别采用“订单营业收入”和“营业额(元)”。产品名优先采用“关联菜品名称”，为空时回退至“菜品名称”。</p>
+        <p class="note">菜品销量按订单分类拆分：店内销售归为“堂食”，其他值归为“外卖”；两类仍共用所选门店、当前统计区间的全渠道总分母。两个板块仅分母分别采用“订单营业收入”和“营业额(元)”。产品名优先采用“关联菜品名称”，为空时回退至“菜品名称”。</p>
       </div>
       <div class="panel">
         <div class="panel-head">
@@ -999,7 +1007,7 @@ HTML_TEMPLATE = r'''<!doctype html>
           </div></div>
           <span class="label" id="productSalesPer10kStatus">默认显示 Top 10</span>
         </div>
-        <div class="table-wrap"><table class="compact-table" id="productSalesPer10kTable"><thead><tr><th>产品名称</th><th>档口</th><th>本期销量</th><th>产品万元销量</th></tr></thead><tbody></tbody></table></div>
+        <div class="table-wrap"><table class="compact-table" id="productSalesPer10kTable"><thead><tr><th>产品名称</th><th>销售分类</th><th>档口</th><th>本期销量</th><th>产品万元销量</th></tr></thead><tbody></tbody></table></div>
       </div>
       <div class="panel full-row">
         <div class="panel-head">
@@ -1009,7 +1017,7 @@ HTML_TEMPLATE = r'''<!doctype html>
           </div></div>
           <span class="label" id="productSalesPer10kGrossStatus">默认显示 Top 10</span>
         </div>
-        <div class="table-wrap"><table class="compact-table" id="productSalesPer10kGrossTable"><thead><tr><th>产品名称</th><th>档口</th><th>本期销量</th><th>产品万元销量</th></tr></thead><tbody></tbody></table></div>
+        <div class="table-wrap"><table class="compact-table" id="productSalesPer10kGrossTable"><thead><tr><th>产品名称</th><th>销售分类</th><th>档口</th><th>本期销量</th><th>产品万元销量</th></tr></thead><tbody></tbody></table></div>
       </div>
     </section>
 
@@ -1686,13 +1694,13 @@ HTML_TEMPLATE = r'''<!doctype html>
       const metric = data[panel.dataKey] || {};
       if (!body || !status) return;
       if (!metric.enabled) {
-        body.innerHTML = `<tr><td colspan="4">${metric.meta?.reason || '产品万元销量需要同时提供菜品主题数据和菜品库。'}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="5">${metric.meta?.reason || '产品万元销量需要同时提供菜品主题数据和菜品库。'}</td></tr>`;
         status.textContent = '未启用';
         return;
       }
       const entity = currentProductSalesPer10kEntity(panel);
       if (!entity || entity.available === false) {
-        body.innerHTML = `<tr><td colspan="4">${entity?.unavailable_reason || `当前区间${panel.denominatorLabel}不可用，无法计算。`}</td></tr>`;
+        body.innerHTML = `<tr><td colspan="5">${entity?.unavailable_reason || `当前区间${panel.denominatorLabel}不可用，无法计算。`}</td></tr>`;
         status.textContent = '不可计算';
         return;
       }
@@ -1706,10 +1714,11 @@ HTML_TEMPLATE = r'''<!doctype html>
         : `Top 10 · 当前区间${panel.denominatorLabel} ${fmtWan(entity?.total_denominator || 0)}`;
       body.innerHTML = rows.length ? rows.map(row => `<tr>
         <td>${row.name}</td>
+        <td>${row.sales_class}</td>
         <td>${row.stall}</td>
         <td>${fmtNum(row.quantity)} 份</td>
         <td>${row.units_per_10k === null || row.units_per_10k === undefined ? '<b>N/A</b>' : `<b>${fmtNum(row.units_per_10k)}</b> 份/万元`}</td>
-      </tr>`).join('') : '<tr><td colspan="4">没有匹配的产品</td></tr>';
+      </tr>`).join('') : '<tr><td colspan="5">没有匹配的产品</td></tr>';
     }
     function renderProductSalesPer10k() {
       productSalesPer10kPanels.forEach(renderProductSalesPer10kPanel);

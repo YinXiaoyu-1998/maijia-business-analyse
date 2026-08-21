@@ -216,6 +216,8 @@ DAYPART_DRIVER_SUMMARY_FIELDS = [
 ]
 
 DINE_IN_DISH_CHANNEL = "店内销售"
+DINE_IN_PRODUCT_SALES_CLASS = "堂食"
+DELIVERY_PRODUCT_SALES_CLASS = "外卖"
 ALL_STORES_LABEL = "全体门店"
 
 UNMATCHED_STALL_MIX_LABEL = "未匹配"
@@ -236,6 +238,7 @@ PRODUCT_SALES_PER_10K_FIELDS = [
     "period_label",
     "门店名称",
     "产品名称",
+    "销售分类",
     "档口",
     "quantity",
     "order_revenue",
@@ -1431,19 +1434,27 @@ def new_product_sales_agg() -> dict[str, Any]:
 
 
 def add_product_sales_observation(
-    groups: dict[tuple[str, str], dict[str, Any]],
+    groups: dict[tuple[str, str, str], dict[str, Any]],
     row: dict[str, Any],
     catalog: dict[str, Any],
+    allowed_stores: set[str] | None = None,
 ) -> None:
     store = str(row.get("门店") or "未知门店").strip() or "未知门店"
+    if allowed_stores is not None and store not in allowed_stores:
+        return
     dish_name = str(row.get("菜品名称") or "").strip()
     linked_dish_name = str(row.get("关联菜品名称") or "").strip()
     product_name = linked_dish_name or dish_name or "未知菜品"
+    sales_class = (
+        DINE_IN_PRODUCT_SALES_CLASS
+        if str(row.get("订单分类") or "") == DINE_IN_DISH_CHANNEL
+        else DELIVERY_PRODUCT_SALES_CLASS
+    )
     quantity = safe_float(row.get("菜品销售数量"))
     stall, status, _source = resolve_stall_from_names(dish_name, linked_dish_name, catalog)
 
     for entity in (store, ALL_STORES_LABEL):
-        agg = groups.setdefault((entity, product_name), new_product_sales_agg())
+        agg = groups.setdefault((entity, product_name, sales_class), new_product_sales_agg())
         agg["quantity"] += quantity
         agg["search_names"].update(name for name in (product_name, dish_name, linked_dish_name) if name)
         if status == "matched":
@@ -1451,14 +1462,14 @@ def add_product_sales_observation(
 
 
 def finalize_product_sales_per_10k_rows(
-    groups: dict[tuple[str, str], dict[str, Any]],
+    groups: dict[tuple[str, str, str], dict[str, Any]],
     order_revenue_by_period_store: dict[tuple[str, str], float],
     period_key: str,
     period_label: str,
     gross_sales_by_period_store: dict[tuple[str, str], float] | None = None,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for (store, product_name), agg in groups.items():
+    for (store, product_name, sales_class), agg in groups.items():
         quantity = float(agg["quantity"])
         order_revenue = order_revenue_by_period_store.get((period_key, store), 0.0)
         gross_sales = (gross_sales_by_period_store or {}).get((period_key, store), 0.0)
@@ -1468,6 +1479,7 @@ def finalize_product_sales_per_10k_rows(
             "period_label": period_label,
             "门店名称": store,
             "产品名称": product_name,
+            "销售分类": sales_class,
             "档口": next(iter(stalls)) if len(stalls) == 1 else UNMATCHED_STALL_MIX_LABEL,
             "quantity": fmt(quantity, 2),
             "order_revenue": fmt(order_revenue, 2),
@@ -1480,6 +1492,7 @@ def finalize_product_sales_per_10k_rows(
         str(row["门店名称"]),
         -float(row.get("units_per_10k") or 0),
         str(row["产品名称"]),
+        str(row["销售分类"]),
     ))
     return rows
 
@@ -1492,9 +1505,14 @@ def aggregate_product_sales_per_10k_rows(
     period_label: str,
     gross_sales_by_period_store: dict[tuple[str, str], float] | None = None,
 ) -> list[dict[str, Any]]:
-    groups: dict[tuple[str, str], dict[str, Any]] = {}
+    groups: dict[tuple[str, str, str], dict[str, Any]] = {}
+    allowed_stores = {
+        store
+        for key, store in revenue_by_period_store
+        if key == period_key and store != ALL_STORES_LABEL
+    }
     for row in dish_rows:
-        add_product_sales_observation(groups, row, catalog)
+        add_product_sales_observation(groups, row, catalog, allowed_stores)
     return finalize_product_sales_per_10k_rows(
         groups,
         revenue_by_period_store,
@@ -1558,7 +1576,12 @@ def profile_stall_sales_mix(
     later_dates = list(reversed(later_dates))
 
     groups: dict[tuple[str, str, str, str], dict[str, Any]] = defaultdict(new_dish_agg)
-    product_groups: dict[tuple[str, str], dict[str, Any]] = {}
+    product_groups: dict[tuple[str, str, str], dict[str, Any]] = {}
+    product_allowed_stores = {
+        store
+        for key, store in order_revenue_by_period_store
+        if key == "current" and store != ALL_STORES_LABEL
+    }
     period_counts: dict[str, int] = defaultdict(int)
     period_dates: dict[str, set[date]] = defaultdict(set)
     income_by_period_store: dict[tuple[str, str], float] = defaultdict(float)
@@ -1612,7 +1635,7 @@ def profile_stall_sales_mix(
                 skipped_out_of_scope_rows += 1
                 continue
             if period_key == "current":
-                add_product_sales_observation(product_groups, row, catalog)
+                add_product_sales_observation(product_groups, row, catalog, product_allowed_stores)
             if str(row.get("订单分类") or "").strip() != DINE_IN_DISH_CHANNEL:
                 skipped_non_dine_in_rows += 1
                 continue
@@ -1685,7 +1708,7 @@ def profile_stall_sales_mix(
     product_order_revenue_enabled = bool(product_rows) and order_revenue_total > 0
     product_order_revenue_meta = {
         "enabled": product_order_revenue_enabled,
-        "basis": "分母=所选门店、当前统计区间、全部渠道的营业分组表「订单营业收入」；分子=同范围菜品主题数据「菜品销售数量」；关联菜品名称优先，缺失时回退菜品名称。",
+        "basis": "分母=所选门店、当前统计区间、全部渠道的营业分组表「订单营业收入」；分子=同范围菜品主题数据「菜品销售数量」，按订单分类拆为堂食（店内销售）与外卖（其他值）；两个销售分类共用全渠道总分母；关联菜品名称优先，缺失时回退菜品名称。",
         "processed_rows": sum(1 for row in product_rows if row.get("门店名称") != ALL_STORES_LABEL),
         "current_business_order_revenue": fmt(order_revenue_total, 2),
         "reason": "" if product_order_revenue_enabled else "当前区间订单营业收入为 0、缺失或没有产品销量，无法计算产品万元销量（订单营业收入）。",
@@ -1695,7 +1718,7 @@ def profile_stall_sales_mix(
     product_gross_sales_enabled = bool(product_rows) and gross_sales_total > 0
     product_gross_sales_meta = {
         "enabled": product_gross_sales_enabled,
-        "basis": "分母=所选门店、当前统计区间、全部渠道的营业分组表「营业额(元)」；分子=同范围菜品主题数据「菜品销售数量」；关联菜品名称优先，缺失时回退菜品名称。",
+        "basis": "分母=所选门店、当前统计区间、全部渠道的营业分组表「营业额(元)」；分子=同范围菜品主题数据「菜品销售数量」，按订单分类拆为堂食（店内销售）与外卖（其他值）；两个销售分类共用全渠道总分母；关联菜品名称优先，缺失时回退菜品名称。",
         "processed_rows": sum(1 for row in product_rows if row.get("门店名称") != ALL_STORES_LABEL),
         "current_business_gross_sales": fmt(gross_sales_total, 2),
         "reason": "" if product_gross_sales_enabled else "当前区间营业额(元)为 0、缺失或没有产品销量，无法计算产品万元销量（营业额）。",

@@ -88,6 +88,7 @@ class MonthlyMeetingReportHtmlTest(unittest.TestCase):
                         "period_label": "本月",
                         "门店名称": "全体门店",
                         "产品名称": "蒜蓉生蚝",
+                        "销售分类": "堂食",
                         "档口": "海鲜",
                         "quantity": 18,
                         "order_revenue": 300,
@@ -111,6 +112,7 @@ class MonthlyMeetingReportHtmlTest(unittest.TestCase):
         self.assertTrue(payload["stall_sales_mix"]["entities"][0]["rows"][1]["is_unmatched"])
         self.assertTrue(payload["product_sales_per_10k"]["enabled"])
         self.assertEqual(payload["product_sales_per_10k"]["entities"][0]["rows"][0]["name"], "蒜蓉生蚝")
+        self.assertEqual(payload["product_sales_per_10k"]["entities"][0]["rows"][0]["sales_class"], "堂食")
         self.assertEqual(payload["product_sales_per_10k"]["entities"][0]["rows"][0]["units_per_10k"], 600)
         self.assertEqual(payload["product_sales_per_10k_order_revenue"]["entities"][0]["rows"][0]["units_per_10k"], 600)
         self.assertEqual(payload["product_sales_per_10k_gross_sales"]["entities"][0]["rows"][0]["units_per_10k"], 300)
