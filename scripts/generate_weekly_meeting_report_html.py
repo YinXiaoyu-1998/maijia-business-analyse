@@ -257,10 +257,18 @@ def build_product_sales_per_10k_payload(
     meta: dict[str, Any],
     denominator_field: str = "order_revenue",
     metric_field: str = "units_per_10k",
+    denominator_label: str = "订单营业收入",
 ) -> dict[str, Any]:
     current_rows = [row for row in rows if row.get("period_key") == "current"]
     if not current_rows:
         return {"enabled": False, "meta": meta, "entities": []}
+    if not all(denominator_field in row and metric_field in row for row in current_rows):
+        unavailable_meta = {
+            **meta,
+            "enabled": False,
+            "reason": f"事实表缺少{denominator_label}口径字段，请重新运行 profiling 后生成报告。",
+        }
+        return {"enabled": False, "meta": unavailable_meta, "entities": []}
 
     stores = sorted({str(row.get("门店名称") or "") for row in current_rows if row.get("门店名称")})
     ordered_stores = [store for store in ["全体门店"] if store in stores] + [store for store in stores if store != "全体门店"]
@@ -271,25 +279,37 @@ def build_product_sales_per_10k_payload(
         if not store_rows:
             continue
         denominator = max(float(row.get(denominator_field) or 0) for row in store_rows)
+        available = denominator > 0
         entities.append({
             "key": "__all__" if store == "全体门店" else store,
             "label": store,
             "total_revenue": round(denominator, 2),
             "total_denominator": round(denominator, 2),
+            "available": available,
+            "unavailable_reason": "" if available else f"当前区间{denominator_label}为 0 或缺失，无法计算产品万元销量。",
             "rows": [
                 {
                     "name": str(row.get("产品名称") or "未知菜品"),
                     "stall": str(row.get("档口") or "未匹配"),
                     "quantity": round(float(row.get("quantity") or 0), 2),
-                    "units_per_10k": round(float(row.get(metric_field) or 0), 4),
+                    "units_per_10k": (
+                        round(float(row.get(metric_field)), 4)
+                        if available and row.get(metric_field) not in (None, "")
+                        else None
+                    ),
                     "search_names": str(row.get("search_names") or row.get("产品名称") or ""),
                 }
                 for row in store_rows
             ],
         })
+    any_available = any(entity["available"] for entity in entities)
+    payload_meta = dict(meta)
+    if not any_available:
+        payload_meta["enabled"] = False
+        payload_meta["reason"] = payload_meta.get("reason") or f"当前区间{denominator_label}为 0 或缺失，无法计算产品万元销量。"
     return {
-        "enabled": bool(meta.get("enabled", bool(entities))) and bool(entities),
-        "meta": meta,
+        "enabled": bool(payload_meta.get("enabled", any_available)) and any_available,
+        "meta": payload_meta,
         "entities": entities,
     }
 
@@ -584,6 +604,7 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
             summary["meta"].get("product_sales_per_10k_gross_sales", {}),
             denominator_field="gross_sales",
             metric_field="units_per_10k_gross_sales",
+            denominator_label="营业额",
         ),
         "dayparts": aggregate_dayparts([row for row in dayparts if row.get("period") in {"本周", "环比周"}]),
         "hourly_revenue_entities": aggregate_hourly_revenue_entities(dayparts),
@@ -1670,6 +1691,11 @@ HTML_TEMPLATE = r'''<!doctype html>
         return;
       }
       const entity = currentProductSalesPer10kEntity(panel);
+      if (!entity || entity.available === false) {
+        body.innerHTML = `<tr><td colspan="4">${entity?.unavailable_reason || `当前区间${panel.denominatorLabel}不可用，无法计算。`}</td></tr>`;
+        status.textContent = '不可计算';
+        return;
+      }
       const query = String(input?.value || '').trim().toLocaleLowerCase('zh-CN');
       const allRows = entity?.rows || [];
       const rows = query
@@ -1682,7 +1708,7 @@ HTML_TEMPLATE = r'''<!doctype html>
         <td>${row.name}</td>
         <td>${row.stall}</td>
         <td>${fmtNum(row.quantity)} 份</td>
-        <td><b>${fmtNum(row.units_per_10k)}</b> 份/万元</td>
+        <td>${row.units_per_10k === null || row.units_per_10k === undefined ? '<b>N/A</b>' : `<b>${fmtNum(row.units_per_10k)}</b> 份/万元`}</td>
       </tr>`).join('') : '<tr><td colspan="4">没有匹配的产品</td></tr>';
     }
     function renderProductSalesPer10k() {

@@ -1681,18 +1681,24 @@ def profile_stall_sales_mix(
     write_csv(output_dir / product_output_name, product_rows, PRODUCT_SALES_PER_10K_FIELDS)
     progress(f"写出产品万元销量: {product_output_name} rows={len(product_rows):,}")
 
+    order_revenue_total = order_revenue_by_period_store.get(("current", ALL_STORES_LABEL), 0.0)
+    product_order_revenue_enabled = bool(product_rows) and order_revenue_total > 0
     product_order_revenue_meta = {
-        "enabled": bool(product_rows) and order_revenue_by_period_store.get(("current", ALL_STORES_LABEL), 0.0) > 0,
+        "enabled": product_order_revenue_enabled,
         "basis": "分母=所选门店、当前统计区间、全部渠道的营业分组表「订单营业收入」；分子=同范围菜品主题数据「菜品销售数量」；关联菜品名称优先，缺失时回退菜品名称。",
         "processed_rows": sum(1 for row in product_rows if row.get("门店名称") != ALL_STORES_LABEL),
-        "current_business_order_revenue": fmt(order_revenue_by_period_store.get(("current", ALL_STORES_LABEL), 0.0), 2),
+        "current_business_order_revenue": fmt(order_revenue_total, 2),
+        "reason": "" if product_order_revenue_enabled else "当前区间订单营业收入为 0、缺失或没有产品销量，无法计算产品万元销量（订单营业收入）。",
         "outputs": [product_output_name],
     }
+    gross_sales_total = gross_sales_by_period_store.get(("current", ALL_STORES_LABEL), 0.0)
+    product_gross_sales_enabled = bool(product_rows) and gross_sales_total > 0
     product_gross_sales_meta = {
-        "enabled": bool(product_rows) and gross_sales_by_period_store.get(("current", ALL_STORES_LABEL), 0.0) > 0,
+        "enabled": product_gross_sales_enabled,
         "basis": "分母=所选门店、当前统计区间、全部渠道的营业分组表「营业额(元)」；分子=同范围菜品主题数据「菜品销售数量」；关联菜品名称优先，缺失时回退菜品名称。",
         "processed_rows": sum(1 for row in product_rows if row.get("门店名称") != ALL_STORES_LABEL),
-        "current_business_gross_sales": fmt(gross_sales_by_period_store.get(("current", ALL_STORES_LABEL), 0.0), 2),
+        "current_business_gross_sales": fmt(gross_sales_total, 2),
+        "reason": "" if product_gross_sales_enabled else "当前区间营业额(元)为 0、缺失或没有产品销量，无法计算产品万元销量（营业额）。",
         "outputs": [product_output_name],
     }
 
@@ -2076,8 +2082,12 @@ def profile(
                 if not stall_sales_mix_meta.get("enabled") else []
             ),
             *(
-                [stall_sales_mix_meta.get("product_sales_per_10k", {}).get("reason", "缺少菜品主题数据或菜品库，未生成产品万元销量。")]
-                if not stall_sales_mix_meta.get("product_sales_per_10k", {}).get("enabled") else []
+                [stall_sales_mix_meta.get("product_sales_per_10k_order_revenue", {}).get("reason", "未生成产品万元销量（订单营业收入）。")]
+                if not stall_sales_mix_meta.get("product_sales_per_10k_order_revenue", {}).get("enabled") else []
+            ),
+            *(
+                [stall_sales_mix_meta.get("product_sales_per_10k_gross_sales", {}).get("reason", "未生成产品万元销量（营业额）。")]
+                if not stall_sales_mix_meta.get("product_sales_per_10k_gross_sales", {}).get("enabled") else []
             ),
             *(
                 [stall_attribution_meta.get("reason", "未生成档口归因。")]

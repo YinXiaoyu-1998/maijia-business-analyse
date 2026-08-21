@@ -188,6 +188,7 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
             summary["meta"].get("product_sales_per_10k_gross_sales", {}),
             denominator_field="gross_sales",
             metric_field="units_per_10k_gross_sales",
+            denominator_label="营业额",
         ),
         "dayparts": aggregate_dayparts([row for row in dayparts if row.get("period") in {"本月", "上月"}]),
         "trend": [],

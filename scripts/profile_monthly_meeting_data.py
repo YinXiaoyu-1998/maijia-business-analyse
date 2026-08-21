@@ -408,8 +408,12 @@ def profile(
                 if not stall_sales_mix_meta.get("enabled") else []
             ),
             *(
-                [stall_sales_mix_meta.get("product_sales_per_10k", {}).get("reason", "缺少菜品主题数据或菜品库，未生成产品万元销量。")]
-                if not stall_sales_mix_meta.get("product_sales_per_10k", {}).get("enabled") else []
+                [stall_sales_mix_meta.get("product_sales_per_10k_order_revenue", {}).get("reason", "未生成产品万元销量（订单营业收入）。")]
+                if not stall_sales_mix_meta.get("product_sales_per_10k_order_revenue", {}).get("enabled") else []
+            ),
+            *(
+                [stall_sales_mix_meta.get("product_sales_per_10k_gross_sales", {}).get("reason", "未生成产品万元销量（营业额）。")]
+                if not stall_sales_mix_meta.get("product_sales_per_10k_gross_sales", {}).get("enabled") else []
             ),
         ],
     }
