@@ -398,6 +398,8 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
                 "quantity": index,
                 "order_revenue": 10_000,
                 "units_per_10k": index,
+                "gross_sales": 20_000,
+                "units_per_10k_gross_sales": index / 2,
                 "search_names": f"产品{index}\u001f别名{index}",
             }
             for index in range(1, 13)
@@ -411,12 +413,108 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
         self.assertEqual(payload["entities"][0]["rows"][0]["name"], "产品12")
         self.assertIn("别名12", payload["entities"][0]["rows"][0]["search_names"])
 
+        gross_payload = report.build_product_sales_per_10k_payload(
+            rows,
+            {"enabled": True},
+            denominator_field="gross_sales",
+            metric_field="units_per_10k_gross_sales",
+        )
+        self.assertEqual(gross_payload["entities"][0]["total_denominator"], 20_000)
+        self.assertEqual(gross_payload["entities"][0]["rows"][0]["units_per_10k"], 6)
+
+    def test_gross_sales_payload_disables_old_fact_schema(self) -> None:
+        rows = [
+            {
+                "period_key": "current",
+                "门店名称": "全体门店",
+                "产品名称": "旧版产品",
+                "quantity": 10,
+                "order_revenue": 10_000,
+                "units_per_10k": 10,
+            }
+        ]
+
+        payload = report.build_product_sales_per_10k_payload(
+            rows,
+            {"enabled": True},
+            denominator_field="gross_sales",
+            metric_field="units_per_10k_gross_sales",
+            denominator_label="营业额",
+        )
+
+        self.assertFalse(payload["enabled"])
+        self.assertIn("重新运行 profiling", payload["meta"]["reason"])
+
+    def test_product_sales_per_10k_payload_marks_zero_denominator_store_unavailable(self) -> None:
+        rows = [
+            {
+                "period_key": "current",
+                "门店名称": "全体门店",
+                "产品名称": "产品甲",
+                "quantity": 10,
+                "gross_sales": 20_000,
+                "units_per_10k_gross_sales": 5,
+            },
+            {
+                "period_key": "current",
+                "门店名称": "零分母店",
+                "产品名称": "产品甲",
+                "quantity": 10,
+                "gross_sales": 0,
+                "units_per_10k_gross_sales": "",
+            },
+        ]
+
+        payload = report.build_product_sales_per_10k_payload(
+            rows,
+            {"enabled": True},
+            denominator_field="gross_sales",
+            metric_field="units_per_10k_gross_sales",
+            denominator_label="营业额",
+        )
+
+        self.assertTrue(payload["enabled"])
+        unavailable = next(entity for entity in payload["entities"] if entity["label"] == "零分母店")
+        self.assertFalse(unavailable["available"])
+        self.assertIn("营业额", unavailable["unavailable_reason"])
+        self.assertIsNone(unavailable["rows"][0]["units_per_10k"])
+
+    def test_product_sales_per_10k_payload_disables_all_zero_denominators(self) -> None:
+        rows = [
+            {
+                "period_key": "current",
+                "门店名称": "全体门店",
+                "产品名称": "产品甲",
+                "quantity": 10,
+                "gross_sales": 0,
+                "units_per_10k_gross_sales": "",
+            }
+        ]
+
+        payload = report.build_product_sales_per_10k_payload(
+            rows,
+            {"enabled": True},
+            denominator_field="gross_sales",
+            metric_field="units_per_10k_gross_sales",
+            denominator_label="营业额",
+        )
+
+        self.assertFalse(payload["enabled"])
+        self.assertIn("营业额", payload["meta"]["reason"])
+
     def test_template_includes_searchable_product_sales_per_10k_section(self) -> None:
         self.assertIn("productSalesPer10kStoreSelect", report.HTML_TEMPLATE)
         self.assertIn("productSalesPer10kSearch", report.HTML_TEMPLATE)
         self.assertIn("renderProductSalesPer10k", report.HTML_TEMPLATE)
         self.assertIn("产品万元销量", report.HTML_TEMPLATE)
         self.assertIn("份/万元", report.HTML_TEMPLATE)
+
+    def test_template_includes_both_product_sales_per_10k_denominators(self) -> None:
+        self.assertIn("产品万元销量（订单营业收入）", report.HTML_TEMPLATE)
+        self.assertIn("产品万元销量（营业额）", report.HTML_TEMPLATE)
+        self.assertIn("productSalesPer10kGrossStoreSelect", report.HTML_TEMPLATE)
+        self.assertIn("productSalesPer10kGrossSearch", report.HTML_TEMPLATE)
+        self.assertIn("productSalesPer10kGrossTable", report.HTML_TEMPLATE)
 
     def test_template_clamps_chart_tooltips_inside_chart_container(self) -> None:
         self.assertIn("function positionTooltip", report.HTML_TEMPLATE)

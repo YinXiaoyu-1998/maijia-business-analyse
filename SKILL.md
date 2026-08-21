@@ -35,11 +35,11 @@ Use this skill to run the Maijia Xiaoguan operating-data workflow end to end:
 - `scripts/profile_business_data.py`: stream-read a Meituan `.xlsx` and create fact tables plus `analysis_summary.json`.
 - `scripts/generate_business_report_html.py`: render a self-contained HTML diagnosis report from the fact tables.
 - `scripts/run_pipeline.py`: execute profiling and HTML generation in one command.
-- `scripts/profile_weekly_meeting_data.py`: stream-read weekly meeting business inputs into comparison, channel, daypart, stall sales mix, product-sales-per-10K, stall attribution, and daypart attribution fact tables.
-- `scripts/generate_weekly_meeting_report_html.py`: render the full weekly meeting HTML with trend, store-size-bucketed quadrant/ranking, channel, stall sales mix, searchable product sales per ¥10K, driver, stall attribution, hourly revenue, and daypart attribution sections.
+- `scripts/profile_weekly_meeting_data.py`: stream-read weekly meeting business inputs into comparison, channel, daypart, stall sales mix, dual-denominator product-sales-per-10K, stall attribution, and daypart attribution fact tables.
+- `scripts/generate_weekly_meeting_report_html.py`: render the full weekly meeting HTML with trend, store-size-bucketed quadrant/ranking, channel, stall sales mix, two searchable product sales per ¥10K panels, driver, stall attribution, hourly revenue, and daypart attribution sections.
 - `scripts/run_weekly_meeting_report.py`: execute the weekly meeting profiling and full HTML generation in one command.
-- `scripts/profile_monthly_meeting_data.py`: stream-read monthly meeting business inputs into month-level comparison, 6-month trend, channel, daypart, stall sales mix, product-sales-per-10K, and attribution fact tables.
-- `scripts/generate_monthly_meeting_report_html.py`: render the full monthly meeting HTML with month-level trend, quadrant, channel, stall sales mix, searchable product sales per ¥10K, driver, hourly revenue, and daypart attribution sections.
+- `scripts/profile_monthly_meeting_data.py`: stream-read monthly meeting business inputs into month-level comparison, 6-month trend, channel, daypart, stall sales mix, dual-denominator product-sales-per-10K, and attribution fact tables.
+- `scripts/generate_monthly_meeting_report_html.py`: render the full monthly meeting HTML with month-level trend, quadrant, channel, stall sales mix, two searchable product sales per ¥10K panels, driver, hourly revenue, and daypart attribution sections.
 - `scripts/run_monthly_meeting_report.py`: execute the monthly meeting profiling and full HTML generation in one command.
 - `scripts/profile_monthly_profit_data.py`: stream-read a monthly profit workbook plus business exports and derive store-month profit-rate facts.
 - `scripts/generate_monthly_profit_report_html.py`: render a standalone, self-contained monthly profit / profit-rate chart report.
@@ -141,17 +141,20 @@ Use this exact口径:
 
 ## Product Sales per ¥10K
 
-Weekly and monthly meeting reports show `产品万元销量` when `--dish-input` and `--catalog` are provided. Calculate it for the report's exact current start/end dates rather than assuming a natural week or natural month.
+Weekly and monthly meeting reports show two parallel product sales per ¥10K panels when `--dish-input` and `--catalog` are provided. Calculate both for the report's exact current start/end dates rather than assuming a natural week or natural month.
 
 Use this exact口径:
 
-- Formula: `产品万元销量 = 菜品销售数量 / 订单营业收入 × 10,000`, unit `份/万元`.
-- Scope alignment: the numerator and denominator must use the same selected store, the same current reporting window, and all sales channels. The numerator is `菜品主题数据.菜品销售数量`; the denominator is `营业分组表.订单营业收入`. Do not substitute `营业额(元)`, `店内营业收入`, or a dine-in-only dish quantity.
-- All stores: sum product quantity across stores and sum `订单营业收入` across stores, then divide. Never average store-level `份/万元` values.
+- Panels and formulas:
+  - `产品万元销量（订单营业收入） = 菜品销售数量 / 订单营业收入 × 10,000`.
+  - `产品万元销量（营业额） = 菜品销售数量 / 营业额(元) × 10,000`.
+  - Both use unit `份/万元`. They coexist in weekly and monthly reports; do not replace one with the other or collapse them into a switch that hides a口径.
+- Scope alignment: each numerator and its denominator must use the same selected store, the same exact current reporting window, and all sales channels. The shared numerator is `菜品主题数据.菜品销售数量`. The two denominators are respectively `营业分组表.订单营业收入` and `营业分组表.营业额(元)`. Do not use `店内营业收入` or a dine-in-only dish quantity.
+- All stores: for each panel, sum product quantity across stores and independently sum that panel's denominator across stores, then divide. Never average store-level `份/万元` values, and never reuse one denominator for the other panel.
 - Product identity and display: use `关联菜品名称` when present; otherwise fall back to `菜品名称`. Aggregate rows sharing that final product name.
 - Search: retain both `菜品名称` and `关联菜品名称` as aliases. A query matching either name must return the aggregated product row.
 - Stall: resolve with the existing dual-name catalog rule. If the aggregated product has no unique matched `基础分类`, display `未匹配`.
-- Display: include `全体门店` plus every store. Default to the Top 10 products ranked by `产品万元销量`; when a search query is present, return all matching products without the Top 10 cap. Show product name, stall, current-period quantity, and `产品万元销量（份/万元）`.
+- Display: each panel independently includes `全体门店` plus every store and its own search box. Default to the Top 10 products ranked by that panel's `产品万元销量`; when a search query is present, return all matching products without the Top 10 cap. Show product name, stall, current-period quantity, and `产品万元销量（份/万元）`.
 - Inputs: both `--dish-input` and `--catalog` are required. If either is missing, disable the module and state the missing input.
 
 ## Weekly Meeting Report Guardrail
@@ -307,7 +310,7 @@ Weekly meeting fact tables:
 - `weekly_store_stall_dish_drivers.csv` when stall attribution is enabled; representative菜品 for each selected档口 driver
 - `dish_catalog_match_summary.csv` when stall attribution is enabled; primary-name matches, linked-name rescues, catalog match rate, unmatched rows, ambiguous rows, and catalog size
 - `weekly_store_stall_sales_mix.csv` when `--dish-input` and `--catalog` are provided; stores current-period档口收入 and店内营业收入 shares for `全体门店` and each store, with unresolved income grouped as `未匹配`
-- `weekly_store_product_sales_per_10k.csv` when `--dish-input` and `--catalog` are provided; stores each current-period product's all-channel quantity, aligned `订单营业收入`, `份/万元`, search aliases, and resolved档口 for `全体门店` and each store
+- `weekly_store_product_sales_per_10k.csv` when `--dish-input` and `--catalog` are provided; stores each current-period product's all-channel quantity, aligned `订单营业收入` and `营业额(元)`, both `份/万元` results, search aliases, and resolved档口 for `全体门店` and each store
 - `weekly_trend_comparison_metrics.csv`
 - `weekly_store_comparison.csv`
 - `store_driver_summary.csv`
@@ -322,7 +325,7 @@ Monthly meeting fact tables:
 - `monthly_store_daypart_comparison.csv` for 本月 / 上月 / 去年同月 daypart revenue comparisons by `门店名称 + 餐段 + 时段`
 - `monthly_store_daypart_driver_summary.csv` for each store's largest negative and positive daypart drivers by 环比 and 同比
 - `monthly_store_stall_sales_mix.csv` when `--dish-input` and `--catalog` are provided; stores current-period档口收入 and店内营业收入 shares for `全体门店` and each store, with unresolved income grouped as `未匹配`
-- `monthly_store_product_sales_per_10k.csv` when `--dish-input` and `--catalog` are provided; uses the same aligned all-channel formula and searchable product identity as the weekly fact table
+- `monthly_store_product_sales_per_10k.csv` when `--dish-input` and `--catalog` are provided; uses the same two aligned all-channel denominator formulas and searchable product identity as the weekly fact table
 - `monthly_trend_comparison_metrics.csv`
 - `monthly_store_comparison.csv`
 - `store_driver_summary.csv`
@@ -340,7 +343,7 @@ Use this default structure:
 4. Store portfolio: ranking, segmentation, outliers, replication opportunities; ranking, segmentation, and quadrant judgments must compare 大店 only with 大店 and 小店 only with 小店.
 5. Channel quality: dine-in, delivery, pickup, platforms, discount intensity.
 6. Stall sales mix: current-period店内营业收入 by档口, Top 10 matched stalls plus separately listed `未匹配` and `其他`, with all-store and single-store views when dish and catalog inputs are available.
-7. Product sales per ¥10K: current-period all-channel quantity divided by aligned `订单营业收入`, with all-store/store selection, Top 10 default ranking, and alias search.
+7. Product sales per ¥10K: show both `产品万元销量（订单营业收入）` and `产品万元销量（营业额）`, each with aligned current-period all-channel quantity, all-store/store selection, Top 10 default ranking, and alias search.
 8. Hourly revenue opportunities: 24-hour revenue bar chart, with a dropdown for all stores or each single store, and peak/off-peak actions.
 9. Stall attribution when enabled: explain which基础分类/档口 and representative菜品 drive each store's biggest dish-income gain/loss in 环比 and 同比.
 10. Daypart attribution: explain which `餐段 + 时段` combinations drive each store's biggest revenue gain/loss in 环比 and 同比.

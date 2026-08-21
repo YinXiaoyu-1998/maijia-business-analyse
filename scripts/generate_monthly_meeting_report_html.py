@@ -179,6 +179,17 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
         "channel_by_store": channel_by_store,
         "stall_sales_mix": build_stall_sales_mix_payload(stall_sales_mix, summary["meta"].get("stall_sales_mix", {})),
         "product_sales_per_10k": build_product_sales_per_10k_payload(product_sales_per_10k, summary["meta"].get("product_sales_per_10k", {})),
+        "product_sales_per_10k_order_revenue": build_product_sales_per_10k_payload(
+            product_sales_per_10k,
+            summary["meta"].get("product_sales_per_10k_order_revenue", summary["meta"].get("product_sales_per_10k", {})),
+        ),
+        "product_sales_per_10k_gross_sales": build_product_sales_per_10k_payload(
+            product_sales_per_10k,
+            summary["meta"].get("product_sales_per_10k_gross_sales", {}),
+            denominator_field="gross_sales",
+            metric_field="units_per_10k_gross_sales",
+            denominator_label="营业额",
+        ),
         "dayparts": aggregate_dayparts([row for row in dayparts if row.get("period") in {"本月", "上月"}]),
         "trend": [],
         "trend_entities": build_trend_comparison_entities(trend_comparison),

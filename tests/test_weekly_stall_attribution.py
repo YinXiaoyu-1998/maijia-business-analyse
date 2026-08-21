@@ -117,6 +117,11 @@ class WeeklyStallAttributionTest(unittest.TestCase):
             revenue,
             period_key="current",
             period_label="当前区间",
+            gross_sales_by_period_store={
+                ("current", "甲店"): 20_000,
+                ("current", "乙店"): 10_000,
+                ("current", profile.ALL_STORES_LABEL): 30_000,
+            },
         )
 
         by_key = {(row["门店名称"], row["产品名称"]): row for row in rows}
@@ -125,6 +130,8 @@ class WeeklyStallAttributionTest(unittest.TestCase):
         self.assertEqual(oysters["quantity"], 20)
         self.assertEqual(oysters["order_revenue"], 10_000)
         self.assertEqual(oysters["units_per_10k"], 20)
+        self.assertEqual(oysters["gross_sales"], 20_000)
+        self.assertEqual(oysters["units_per_10k_gross_sales"], 10)
         self.assertEqual(
             set(oysters["search_names"].split("\u001f")),
             {"蒜蓉生蚝", "蒜蓉生蚝特惠", "标准生蚝"},
@@ -137,6 +144,19 @@ class WeeklyStallAttributionTest(unittest.TestCase):
         all_oysters = by_key[(profile.ALL_STORES_LABEL, "蒜蓉生蚝")]
         self.assertEqual(all_oysters["quantity"], 20)
         self.assertAlmostEqual(all_oysters["units_per_10k"], 20 / 15_000 * 10_000, places=4)
+        self.assertAlmostEqual(all_oysters["units_per_10k_gross_sales"], 20 / 30_000 * 10_000, places=4)
+
+    def test_gross_sales_map_uses_gross_sales_and_aggregates_all_stores(self) -> None:
+        rows = [
+            {"period_key": "current", "门店名称": "甲店", "net_revenue": 80, "gross_sales": 100},
+            {"period_key": "current", "门店名称": "乙店", "net_revenue": 150, "gross_sales": 200},
+        ]
+
+        result = profile.build_gross_sales_map(rows)
+
+        self.assertEqual(result[("current", "甲店")], 100)
+        self.assertEqual(result[("current", "乙店")], 200)
+        self.assertEqual(result[("current", profile.ALL_STORES_LABEL)], 300)
 
     def test_product_sales_per_10k_marks_conflicting_or_missing_stalls_unmatched(self) -> None:
         catalog = self.catalog_for({
