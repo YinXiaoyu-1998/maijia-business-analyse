@@ -14,6 +14,7 @@ from generate_weekly_meeting_report_html import (
     REVENUE_BASIS_NOTE,
     aggregate_dayparts,
     attach_daypart_slots,
+    build_product_sales_per_10k_payload,
     build_stall_sales_mix_payload,
     compact_daypart_drivers,
     median,
@@ -79,6 +80,7 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
     daypart_comparison = read_optional_csv(input_dir / "monthly_store_daypart_comparison.csv")
     daypart_drivers = read_optional_csv(input_dir / "monthly_store_daypart_driver_summary.csv")
     stall_sales_mix = read_optional_csv(input_dir / "monthly_store_stall_sales_mix.csv")
+    product_sales_per_10k = read_optional_csv(input_dir / "monthly_store_product_sales_per_10k.csv")
 
     segment_by_store = {row["门店名称"]: row for row in segments}
     driver_by_store = {
@@ -176,6 +178,7 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
         "segments": segments,
         "channel_by_store": channel_by_store,
         "stall_sales_mix": build_stall_sales_mix_payload(stall_sales_mix, summary["meta"].get("stall_sales_mix", {})),
+        "product_sales_per_10k": build_product_sales_per_10k_payload(product_sales_per_10k, summary["meta"].get("product_sales_per_10k", {})),
         "dayparts": aggregate_dayparts([row for row in dayparts if row.get("period") in {"本月", "上月"}]),
         "trend": [],
         "trend_entities": build_trend_comparison_entities(trend_comparison),

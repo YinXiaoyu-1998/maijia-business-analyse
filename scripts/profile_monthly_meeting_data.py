@@ -21,6 +21,7 @@ from profile_weekly_meeting_data import (
     driver_pair,
     export_group,
     build_dine_in_revenue_map,
+    build_order_revenue_map,
     inspect_workbook,
     parse_date,
     profile_stall_sales_mix,
@@ -306,6 +307,7 @@ def profile(
         output_dir,
         target_windows,
         build_dine_in_revenue_map(target_rows),
+        build_order_revenue_map(target_rows),
         output_prefix="monthly",
     )
 
@@ -385,6 +387,7 @@ def profile(
                 ],
             },
             "stall_sales_mix": stall_sales_mix_meta,
+            "product_sales_per_10k": stall_sales_mix_meta.get("product_sales_per_10k", {}),
         },
         "comparison": comparison_rows,
         "drivers": driver_rows,
@@ -399,6 +402,10 @@ def profile(
             *(
                 [stall_sales_mix_meta.get("reason", "缺少菜品主题数据或菜品库，未生成档口占比。")]
                 if not stall_sales_mix_meta.get("enabled") else []
+            ),
+            *(
+                [stall_sales_mix_meta.get("product_sales_per_10k", {}).get("reason", "缺少菜品主题数据或菜品库，未生成产品万元销量。")]
+                if not stall_sales_mix_meta.get("product_sales_per_10k", {}).get("enabled") else []
             ),
         ],
     }

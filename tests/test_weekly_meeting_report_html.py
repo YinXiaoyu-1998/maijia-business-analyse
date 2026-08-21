@@ -387,6 +387,37 @@ class WeeklyMeetingReportHtmlTest(unittest.TestCase):
         self.assertIn("档口占比", report.HTML_TEMPLATE)
         self.assertIn("未匹配", report.HTML_TEMPLATE)
 
+    def test_product_sales_per_10k_payload_keeps_all_rows_for_search_and_sorts_descending(self) -> None:
+        rows = [
+            {
+                "period_key": "current",
+                "period_label": "当前区间",
+                "门店名称": "全体门店",
+                "产品名称": f"产品{index}",
+                "档口": "热菜",
+                "quantity": index,
+                "order_revenue": 10_000,
+                "units_per_10k": index,
+                "search_names": f"产品{index}\u001f别名{index}",
+            }
+            for index in range(1, 13)
+        ]
+
+        payload = report.build_product_sales_per_10k_payload(rows, {"enabled": True})
+
+        self.assertTrue(payload["enabled"])
+        self.assertEqual(payload["entities"][0]["key"], "__all__")
+        self.assertEqual(len(payload["entities"][0]["rows"]), 12)
+        self.assertEqual(payload["entities"][0]["rows"][0]["name"], "产品12")
+        self.assertIn("别名12", payload["entities"][0]["rows"][0]["search_names"])
+
+    def test_template_includes_searchable_product_sales_per_10k_section(self) -> None:
+        self.assertIn("productSalesPer10kStoreSelect", report.HTML_TEMPLATE)
+        self.assertIn("productSalesPer10kSearch", report.HTML_TEMPLATE)
+        self.assertIn("renderProductSalesPer10k", report.HTML_TEMPLATE)
+        self.assertIn("产品万元销量", report.HTML_TEMPLATE)
+        self.assertIn("份/万元", report.HTML_TEMPLATE)
+
     def test_template_clamps_chart_tooltips_inside_chart_container(self) -> None:
         self.assertIn("function positionTooltip", report.HTML_TEMPLATE)
         self.assertIn("bounds.width - tipWidth - 8", report.HTML_TEMPLATE)
