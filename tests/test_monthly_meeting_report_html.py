@@ -45,6 +45,8 @@ class MonthlyMeetingReportHtmlTest(unittest.TestCase):
                             "outputs": [],
                             "stall_sales_mix": {"enabled": True, "basis": "测试月度档口比例"},
                             "product_sales_per_10k": {"enabled": True, "basis": "测试月度产品万元销量"},
+                            "product_sales_per_10k_order_revenue": {"enabled": True, "basis": "订单营业收入"},
+                            "product_sales_per_10k_gross_sales": {"enabled": True, "basis": "营业额"},
                         },
                         "data_gaps": [],
                     },
@@ -90,6 +92,8 @@ class MonthlyMeetingReportHtmlTest(unittest.TestCase):
                         "quantity": 18,
                         "order_revenue": 300,
                         "units_per_10k": 600,
+                        "gross_sales": 600,
+                        "units_per_10k_gross_sales": 300,
                         "search_names": "蒜蓉生蚝\u001f生蚝特惠",
                     }
                 ],
@@ -108,6 +112,9 @@ class MonthlyMeetingReportHtmlTest(unittest.TestCase):
         self.assertTrue(payload["product_sales_per_10k"]["enabled"])
         self.assertEqual(payload["product_sales_per_10k"]["entities"][0]["rows"][0]["name"], "蒜蓉生蚝")
         self.assertEqual(payload["product_sales_per_10k"]["entities"][0]["rows"][0]["units_per_10k"], 600)
+        self.assertEqual(payload["product_sales_per_10k_order_revenue"]["entities"][0]["rows"][0]["units_per_10k"], 600)
+        self.assertEqual(payload["product_sales_per_10k_gross_sales"]["entities"][0]["rows"][0]["units_per_10k"], 300)
+        self.assertEqual(payload["product_sales_per_10k_gross_sales"]["entities"][0]["total_denominator"], 600)
 
 
 if __name__ == "__main__":

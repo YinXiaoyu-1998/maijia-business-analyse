@@ -7,7 +7,7 @@ A reusable skill for Maijia Xiaoguan / Meituan POS business analysis. It helps a
 - Guides data export from Meituan 管家 `自助营业取数`.
 - Builds daypart attribution from the `营业分组表` field `时段` for weekly and monthly meeting reports.
 - Builds a `档口占比` pie chart and detail table from `自助菜品取数` plus the dish catalog for weekly and monthly reports.
-- Builds a searchable `产品万元销量` table for weekly and monthly reports, using aligned all-channel product quantity and `订单营业收入` for all stores or each store.
+- Builds two searchable `产品万元销量` tables for weekly and monthly reports: one uses aligned all-channel `订单营业收入`, and one uses aligned all-channel `营业额(元)`, for all stores or each store.
 - Processes large Excel exports without loading the whole workbook into memory.
 - Builds fact tables for stores, channels, dayparts, members, and monthly trends.
 - Generates a self-contained HTML report with KPI cards, bar charts, scatter plots, heatmaps, sortable tables, and an opportunity pool.
@@ -67,7 +67,7 @@ Save all raw downloaded files under `documents/raw_exports/`:
 
 For split downloads, append `_part01`, `_part02`, etc. before `.xlsx`.
 
-Weekly and monthly meeting reports use the business export's `时段` field for daypart attribution. For `档口占比` and `产品万元销量`, also fetch `自助取数 -> 自助菜品取数` and the dish catalog, saving them with standard names such as `documents/raw_exports/maijia_dishes_20260614_20260620.xlsx` and `documents/raw_exports/maijia_dish_catalog_20260620.xlsx`. `档口占比` keeps its dine-in revenue basis. `产品万元销量` uses the exact supplied current date window and calculates `all-channel 菜品销售数量 / all-channel 订单营业收入 × 10,000`; it prefers `关联菜品名称`, falls back to `菜品名称`, defaults to Top 10, and searches both names.
+Weekly and monthly meeting reports use the business export's `时段` field for daypart attribution. For `档口占比` and `产品万元销量`, also fetch `自助取数 -> 自助菜品取数` and the dish catalog, saving them with standard names such as `documents/raw_exports/maijia_dishes_20260614_20260620.xlsx` and `documents/raw_exports/maijia_dish_catalog_20260620.xlsx`. `档口占比` keeps its dine-in revenue basis. For the exact supplied current date window, `产品万元销量（订单营业收入）` calculates `all-channel 菜品销售数量 / all-channel 订单营业收入 × 10,000`, while `产品万元销量（营业额）` calculates the same numerator divided by all-channel `营业额(元)`. Both prefer `关联菜品名称`, fall back to `菜品名称`, default to Top 10, and search both names.
 
 ### 2. Run the Full Pipeline
 

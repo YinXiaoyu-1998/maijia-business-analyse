@@ -252,7 +252,12 @@ def build_stall_sales_mix_payload(rows: list[dict[str, Any]], meta: dict[str, An
     }
 
 
-def build_product_sales_per_10k_payload(rows: list[dict[str, Any]], meta: dict[str, Any]) -> dict[str, Any]:
+def build_product_sales_per_10k_payload(
+    rows: list[dict[str, Any]],
+    meta: dict[str, Any],
+    denominator_field: str = "order_revenue",
+    metric_field: str = "units_per_10k",
+) -> dict[str, Any]:
     current_rows = [row for row in rows if row.get("period_key") == "current"]
     if not current_rows:
         return {"enabled": False, "meta": meta, "entities": []}
@@ -262,20 +267,21 @@ def build_product_sales_per_10k_payload(rows: list[dict[str, Any]], meta: dict[s
     entities = []
     for store in ordered_stores:
         store_rows = [row for row in current_rows if row.get("门店名称") == store and float(row.get("quantity") or 0) > 0]
-        store_rows.sort(key=lambda row: (-float(row.get("units_per_10k") or 0), str(row.get("产品名称") or "")))
+        store_rows.sort(key=lambda row: (-float(row.get(metric_field) or 0), str(row.get("产品名称") or "")))
         if not store_rows:
             continue
-        denominator = max(float(row.get("order_revenue") or 0) for row in store_rows)
+        denominator = max(float(row.get(denominator_field) or 0) for row in store_rows)
         entities.append({
             "key": "__all__" if store == "全体门店" else store,
             "label": store,
             "total_revenue": round(denominator, 2),
+            "total_denominator": round(denominator, 2),
             "rows": [
                 {
                     "name": str(row.get("产品名称") or "未知菜品"),
                     "stall": str(row.get("档口") or "未匹配"),
                     "quantity": round(float(row.get("quantity") or 0), 2),
-                    "units_per_10k": round(float(row.get("units_per_10k") or 0), 4),
+                    "units_per_10k": round(float(row.get(metric_field) or 0), 4),
                     "search_names": str(row.get("search_names") or row.get("产品名称") or ""),
                 }
                 for row in store_rows
@@ -569,6 +575,16 @@ def build_payload(input_dir: Path, company: str) -> dict[str, Any]:
         "channel_by_store": channel_by_store,
         "stall_sales_mix": build_stall_sales_mix_payload(stall_sales_mix, summary["meta"].get("stall_sales_mix", {})),
         "product_sales_per_10k": build_product_sales_per_10k_payload(product_sales_per_10k, summary["meta"].get("product_sales_per_10k", {})),
+        "product_sales_per_10k_order_revenue": build_product_sales_per_10k_payload(
+            product_sales_per_10k,
+            summary["meta"].get("product_sales_per_10k_order_revenue", summary["meta"].get("product_sales_per_10k", {})),
+        ),
+        "product_sales_per_10k_gross_sales": build_product_sales_per_10k_payload(
+            product_sales_per_10k,
+            summary["meta"].get("product_sales_per_10k_gross_sales", {}),
+            denominator_field="gross_sales",
+            metric_field="units_per_10k_gross_sales",
+        ),
         "dayparts": aggregate_dayparts([row for row in dayparts if row.get("period") in {"本周", "环比周"}]),
         "hourly_revenue_entities": aggregate_hourly_revenue_entities(dayparts),
         "trend": aggregate_trend(weekly, current_window_end),
@@ -951,18 +967,28 @@ HTML_TEMPLATE = r'''<!doctype html>
 
     <section class="section" id="product-sales-per-10k">
       <div class="section-head">
-        <div><div class="kicker">06 Product Sales per ¥10K</div><h2>产品万元销量：每万元订单营业收入对应多少份产品</h2></div>
-        <p class="note">分子与分母严格使用同一门店、同一当前统计区间和全部渠道；产品名优先采用“关联菜品名称”，为空时回退至“菜品名称”。</p>
+        <div><div class="kicker">06 Product Sales per ¥10K</div><h2>产品万元销量：双口径预测与要货参考</h2></div>
+        <p class="note">两个板块共用同一门店、同一当前统计区间、全部渠道的菜品销量；仅分母分别采用“订单营业收入”和“营业额(元)”。产品名优先采用“关联菜品名称”，为空时回退至“菜品名称”。</p>
       </div>
       <div class="panel">
         <div class="panel-head">
-          <div class="product-toolbar">
-            <select id="productSalesPer10kStoreSelect" class="mini-select" aria-label="选择门店产品万元销量"></select>
+          <div><h3>产品万元销量（订单营业收入）</h3><div class="product-toolbar" style="margin-top:8px;">
+            <select id="productSalesPer10kStoreSelect" class="mini-select" aria-label="选择门店产品万元销量（订单营业收入）"></select>
             <input id="productSalesPer10kSearch" class="search-input" type="search" placeholder="搜索菜品名称或关联菜品名称，例如：生蚝" aria-label="搜索产品">
-          </div>
+          </div></div>
           <span class="label" id="productSalesPer10kStatus">默认显示 Top 10</span>
         </div>
         <div class="table-wrap"><table class="compact-table" id="productSalesPer10kTable"><thead><tr><th>产品名称</th><th>档口</th><th>本期销量</th><th>产品万元销量</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="panel full-row">
+        <div class="panel-head">
+          <div><h3>产品万元销量（营业额）</h3><div class="product-toolbar" style="margin-top:8px;">
+            <select id="productSalesPer10kGrossStoreSelect" class="mini-select" aria-label="选择门店产品万元销量（营业额）"></select>
+            <input id="productSalesPer10kGrossSearch" class="search-input" type="search" placeholder="搜索菜品名称或关联菜品名称，例如：生蚝" aria-label="搜索产品（营业额口径）">
+          </div></div>
+          <span class="label" id="productSalesPer10kGrossStatus">默认显示 Top 10</span>
+        </div>
+        <div class="table-wrap"><table class="compact-table" id="productSalesPer10kGrossTable"><thead><tr><th>产品名称</th><th>档口</th><th>本期销量</th><th>产品万元销量</th></tr></thead><tbody></tbody></table></div>
       </div>
     </section>
 
@@ -1031,7 +1057,19 @@ HTML_TEMPLATE = r'''<!doctype html>
     let selectedTrendKey = '__all__';
     let selectedHourlyKey = '__all__';
     let selectedStallMixKey = '__all__';
-    let selectedProductSalesPer10kKey = '__all__';
+    const selectedProductSalesPer10kKeys = {orderRevenue:'__all__', grossSales:'__all__'};
+    const productSalesPer10kPanels = [
+      {
+        stateKey:'orderRevenue', dataKey:'product_sales_per_10k_order_revenue',
+        selectId:'productSalesPer10kStoreSelect', searchId:'productSalesPer10kSearch',
+        statusId:'productSalesPer10kStatus', tableId:'productSalesPer10kTable', denominatorLabel:'订单营业收入'
+      },
+      {
+        stateKey:'grossSales', dataKey:'product_sales_per_10k_gross_sales',
+        selectId:'productSalesPer10kGrossStoreSelect', searchId:'productSalesPer10kGrossSearch',
+        statusId:'productSalesPer10kGrossStatus', tableId:'productSalesPer10kGrossTable', denominatorLabel:'营业额'
+      },
+    ];
     const stallPalette = ['#006d77', '#2f5b9f', '#3a7d44', '#b85c00', '#7557a6', '#d96b3b', '#b23a48', '#c89b18', '#4b5563', '#0f766e', '#9aa7b5'];
     const currentTrendYear = String(data.meta?.target_windows?.current?.end || '').slice(0, 4) || '本年';
     const yoyTrendYear = String(data.meta?.target_windows?.yoy?.end || '').slice(0, 4) || '同期';
@@ -1598,50 +1636,57 @@ HTML_TEMPLATE = r'''<!doctype html>
         `).join('');
       }
     }
-    function currentProductSalesPer10kEntity() {
-      const entities = data.product_sales_per_10k?.entities || [];
-      return entities.find(item => item.key === selectedProductSalesPer10kKey) || entities[0];
+    function currentProductSalesPer10kEntity(panel) {
+      const entities = data[panel.dataKey]?.entities || [];
+      return entities.find(item => item.key === selectedProductSalesPer10kKeys[panel.stateKey]) || entities[0];
     }
     function renderProductSalesPer10kSelector() {
-      const select = document.getElementById('productSalesPer10kStoreSelect');
-      const input = document.getElementById('productSalesPer10kSearch');
-      if (!select || !input) return;
-      const entities = data.product_sales_per_10k?.entities || [];
-      select.innerHTML = entities.map(item => `<option value="${item.key}">${cleanName(item.label)}</option>`).join('');
-      if (!entities.some(item => item.key === selectedProductSalesPer10kKey)) selectedProductSalesPer10kKey = entities[0]?.key || '__all__';
-      select.value = selectedProductSalesPer10kKey;
-      select.addEventListener('change', () => {
-        selectedProductSalesPer10kKey = select.value;
-        renderProductSalesPer10k();
+      productSalesPer10kPanels.forEach(panel => {
+        const select = document.getElementById(panel.selectId);
+        const input = document.getElementById(panel.searchId);
+        if (!select || !input) return;
+        const entities = data[panel.dataKey]?.entities || [];
+        select.innerHTML = entities.map(item => `<option value="${item.key}">${cleanName(item.label)}</option>`).join('');
+        if (!entities.some(item => item.key === selectedProductSalesPer10kKeys[panel.stateKey])) {
+          selectedProductSalesPer10kKeys[panel.stateKey] = entities[0]?.key || '__all__';
+        }
+        select.value = selectedProductSalesPer10kKeys[panel.stateKey];
+        select.addEventListener('change', () => {
+          selectedProductSalesPer10kKeys[panel.stateKey] = select.value;
+          renderProductSalesPer10kPanel(panel);
+        });
+        input.addEventListener('input', () => renderProductSalesPer10kPanel(panel));
       });
-      input.addEventListener('input', renderProductSalesPer10k);
     }
-    function renderProductSalesPer10k() {
-      const body = document.querySelector('#productSalesPer10kTable tbody');
-      const input = document.getElementById('productSalesPer10kSearch');
-      const status = document.getElementById('productSalesPer10kStatus');
-      const metric = data.product_sales_per_10k || {};
+    function renderProductSalesPer10kPanel(panel) {
+      const body = document.querySelector(`#${panel.tableId} tbody`);
+      const input = document.getElementById(panel.searchId);
+      const status = document.getElementById(panel.statusId);
+      const metric = data[panel.dataKey] || {};
       if (!body || !status) return;
       if (!metric.enabled) {
         body.innerHTML = `<tr><td colspan="4">${metric.meta?.reason || '产品万元销量需要同时提供菜品主题数据和菜品库。'}</td></tr>`;
         status.textContent = '未启用';
         return;
       }
-      const entity = currentProductSalesPer10kEntity();
+      const entity = currentProductSalesPer10kEntity(panel);
       const query = String(input?.value || '').trim().toLocaleLowerCase('zh-CN');
       const allRows = entity?.rows || [];
       const rows = query
         ? allRows.filter(row => String(row.search_names || row.name || '').toLocaleLowerCase('zh-CN').includes(query))
         : allRows.slice(0, 10);
       status.textContent = query
-        ? `找到 ${rows.length} 项 · 当前区间订单营业收入 ${fmtWan(entity?.total_revenue || 0)}`
-        : `Top 10 · 当前区间订单营业收入 ${fmtWan(entity?.total_revenue || 0)}`;
+        ? `找到 ${rows.length} 项 · 当前区间${panel.denominatorLabel} ${fmtWan(entity?.total_denominator || 0)}`
+        : `Top 10 · 当前区间${panel.denominatorLabel} ${fmtWan(entity?.total_denominator || 0)}`;
       body.innerHTML = rows.length ? rows.map(row => `<tr>
         <td>${row.name}</td>
         <td>${row.stall}</td>
         <td>${fmtNum(row.quantity)} 份</td>
         <td><b>${fmtNum(row.units_per_10k)}</b> 份/万元</td>
       </tr>`).join('') : '<tr><td colspan="4">没有匹配的产品</td></tr>';
+    }
+    function renderProductSalesPer10k() {
+      productSalesPer10kPanels.forEach(renderProductSalesPer10kPanel);
     }
     function renderDriverBar() {
       const groups = segmentGroups.map(group => ({
