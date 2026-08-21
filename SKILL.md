@@ -149,12 +149,12 @@ Use this exact口径:
   - `产品万元销量（订单营业收入） = 菜品销售数量 / 订单营业收入 × 10,000`.
   - `产品万元销量（营业额） = 菜品销售数量 / 营业额(元) × 10,000`.
   - Both use unit `份/万元`. They coexist in weekly and monthly reports; do not replace one with the other or collapse them into a switch that hides a口径.
-- Scope alignment: each numerator and its denominator must use the same selected store, the same exact current reporting window, and all sales channels. The shared numerator is `菜品主题数据.菜品销售数量`. The two denominators are respectively `营业分组表.订单营业收入` and `营业分组表.营业额(元)`. Do not use `店内营业收入` or a dine-in-only dish quantity.
-- All stores: for each panel, sum product quantity across stores and independently sum that panel's denominator across stores, then divide. Never average store-level `份/万元` values, and never reuse one denominator for the other panel.
-- Product identity and display: use `关联菜品名称` when present; otherwise fall back to `菜品名称`. Aggregate rows sharing that final product name.
-- Search: retain both `菜品名称` and `关联菜品名称` as aliases. A query matching either name must return the aggregated product row.
+- Scope alignment: each numerator and its denominator must use the same selected store scope and the same exact current reporting window. Include only dish rows whose store exists in the current-period business denominator scope. The numerator is `菜品主题数据.菜品销售数量`; split it by `销售分类`, mapping only a raw `订单分类` value exactly equal to `店内销售` (without trimming or fuzzy matching) to `堂食` and every other value, including blanks and whitespace-padded variants, to `外卖`. The two denominators remain the selected store scope's all-channel totals: respectively `营业分组表.订单营业收入` and `营业分组表.营业额(元)`. Do not split either denominator by销售分类, and do not use `店内营业收入`.
+- Store selection: a single-store selection uses only that store's product quantity and all-channel denominator. `全体门店` sums product quantity across all stores separately for each `销售分类`, independently sums that panel's all-channel denominator across all stores, then divides. Never average store-level `份/万元` values, never treat `全体门店` as a pre-averaged virtual store, and never reuse one panel's denominator for the other panel.
+- Product identity and display: use `关联菜品名称` when present; otherwise fall back to `菜品名称`. Aggregate by selected store scope + final product name + `销售分类`, so the same product may appear once as `堂食` and once as `外卖`. Keep the displayed product name free of channel prefixes or suffixes; use a separate `销售分类` field to distinguish the rows.
+- Search: retain both `菜品名称` and `关联菜品名称` as aliases within each product-and-sales-class row. A query matching either name must return every matching row, including both堂食 and外卖 rows when both exist.
 - Stall: resolve with the existing dual-name catalog rule. If the aggregated product has no unique matched `基础分类`, display `未匹配`.
-- Display: each panel independently includes `全体门店` plus every store and its own search box. Default to the Top 10 products ranked by that panel's `产品万元销量`; when a search query is present, return all matching products without the Top 10 cap. Show product name, stall, current-period quantity, and `产品万元销量（份/万元）`.
+- Display: each panel independently includes `全体门店` plus every store and its own search box. Default to the Top 10 product-and-sales-class rows ranked by that panel's `产品万元销量`; when a search query is present, return all matching rows without the Top 10 cap. Show product name, `销售分类`, stall, current-period quantity, and `产品万元销量（份/万元）`.
 - Inputs: both `--dish-input` and `--catalog` are required. If either is missing, disable the module and state the missing input.
 
 ## Weekly Meeting Report Guardrail
@@ -310,7 +310,7 @@ Weekly meeting fact tables:
 - `weekly_store_stall_dish_drivers.csv` when stall attribution is enabled; representative菜品 for each selected档口 driver
 - `dish_catalog_match_summary.csv` when stall attribution is enabled; primary-name matches, linked-name rescues, catalog match rate, unmatched rows, ambiguous rows, and catalog size
 - `weekly_store_stall_sales_mix.csv` when `--dish-input` and `--catalog` are provided; stores current-period档口收入 and店内营业收入 shares for `全体门店` and each store, with unresolved income grouped as `未匹配`
-- `weekly_store_product_sales_per_10k.csv` when `--dish-input` and `--catalog` are provided; stores each current-period product's all-channel quantity, aligned `订单营业收入` and `营业额(元)`, both `份/万元` results, search aliases, and resolved档口 for `全体门店` and each store
+- `weekly_store_product_sales_per_10k.csv` when `--dish-input` and `--catalog` are provided; stores each current-period product-and-sales-class row's quantity, the selected store scope's shared all-channel `订单营业收入` and `营业额(元)`, both `份/万元` results, search aliases, and resolved档口 for `全体门店` and each store
 - `weekly_trend_comparison_metrics.csv`
 - `weekly_store_comparison.csv`
 - `store_driver_summary.csv`
@@ -325,7 +325,7 @@ Monthly meeting fact tables:
 - `monthly_store_daypart_comparison.csv` for 本月 / 上月 / 去年同月 daypart revenue comparisons by `门店名称 + 餐段 + 时段`
 - `monthly_store_daypart_driver_summary.csv` for each store's largest negative and positive daypart drivers by 环比 and 同比
 - `monthly_store_stall_sales_mix.csv` when `--dish-input` and `--catalog` are provided; stores current-period档口收入 and店内营业收入 shares for `全体门店` and each store, with unresolved income grouped as `未匹配`
-- `monthly_store_product_sales_per_10k.csv` when `--dish-input` and `--catalog` are provided; uses the same two aligned all-channel denominator formulas and searchable product identity as the weekly fact table
+- `monthly_store_product_sales_per_10k.csv` when `--dish-input` and `--catalog` are provided; uses the same `堂食`/`外卖` product-row split, shared all-channel denominators, two formulas, and searchable product identity as the weekly fact table
 - `monthly_trend_comparison_metrics.csv`
 - `monthly_store_comparison.csv`
 - `store_driver_summary.csv`
@@ -343,7 +343,7 @@ Use this default structure:
 4. Store portfolio: ranking, segmentation, outliers, replication opportunities; ranking, segmentation, and quadrant judgments must compare 大店 only with 大店 and 小店 only with 小店.
 5. Channel quality: dine-in, delivery, pickup, platforms, discount intensity.
 6. Stall sales mix: current-period店内营业收入 by档口, Top 10 matched stalls plus separately listed `未匹配` and `其他`, with all-store and single-store views when dish and catalog inputs are available.
-7. Product sales per ¥10K: show both `产品万元销量（订单营业收入）` and `产品万元销量（营业额）`, each with aligned current-period all-channel quantity, all-store/store selection, Top 10 default ranking, and alias search.
+7. Product sales per ¥10K: show both `产品万元销量（订单营业收入）` and `产品万元销量（营业额）`; split product quantities into `堂食` and `外卖` rows while retaining the selected scope's shared all-channel denominator, and include all-store/store selection, a separate `销售分类` column, Top 10 default ranking, and alias search.
 8. Hourly revenue opportunities: 24-hour revenue bar chart, with a dropdown for all stores or each single store, and peak/off-peak actions.
 9. Stall attribution when enabled: explain which基础分类/档口 and representative菜品 drive each store's biggest dish-income gain/loss in 环比 and 同比.
 10. Daypart attribution: explain which `餐段 + 时段` combinations drive each store's biggest revenue gain/loss in 环比 and 同比.

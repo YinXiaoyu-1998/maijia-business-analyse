@@ -99,10 +99,24 @@ class WeeklyStallAttributionTest(unittest.TestCase):
             },
             {
                 "门店": "乙店",
+                "菜品名称": "生蚝外卖装",
+                "关联菜品名称": "蒜蓉生蚝",
+                "订单分类": "京东秒送",
+                "菜品销售数量": "2",
+            },
+            {
+                "门店": "乙店",
                 "菜品名称": "鸡翅",
                 "关联菜品名称": "",
                 "订单分类": "自提",
                 "菜品销售数量": "5",
+            },
+            {
+                "门店": "范围外门店",
+                "菜品名称": "蒜蓉生蚝",
+                "关联菜品名称": "蒜蓉生蚝",
+                "订单分类": "店内销售",
+                "菜品销售数量": "90",
             },
         ]
         revenue = {
@@ -124,27 +138,67 @@ class WeeklyStallAttributionTest(unittest.TestCase):
             },
         )
 
-        by_key = {(row["门店名称"], row["产品名称"]): row for row in rows}
-        oysters = by_key[("甲店", "蒜蓉生蚝")]
-        self.assertEqual(oysters["档口"], "海鲜")
-        self.assertEqual(oysters["quantity"], 20)
-        self.assertEqual(oysters["order_revenue"], 10_000)
-        self.assertEqual(oysters["units_per_10k"], 20)
-        self.assertEqual(oysters["gross_sales"], 20_000)
-        self.assertEqual(oysters["units_per_10k_gross_sales"], 10)
+        by_key = {(row["门店名称"], row["产品名称"], row["销售分类"]): row for row in rows}
+        dine_in_oysters = by_key[("甲店", "蒜蓉生蚝", "堂食")]
+        self.assertEqual(dine_in_oysters["档口"], "海鲜")
+        self.assertEqual(dine_in_oysters["quantity"], 12)
+        self.assertEqual(dine_in_oysters["order_revenue"], 10_000)
+        self.assertEqual(dine_in_oysters["units_per_10k"], 12)
+        self.assertEqual(dine_in_oysters["gross_sales"], 20_000)
+        self.assertEqual(dine_in_oysters["units_per_10k_gross_sales"], 6)
         self.assertEqual(
-            set(oysters["search_names"].split("\u001f")),
-            {"蒜蓉生蚝", "蒜蓉生蚝特惠", "标准生蚝"},
+            set(dine_in_oysters["search_names"].split("\u001f")),
+            {"蒜蓉生蚝", "蒜蓉生蚝特惠"},
         )
 
-        fallback = by_key[("乙店", "鸡翅")]
+        delivery_oysters = by_key[("甲店", "蒜蓉生蚝", "外卖")]
+        self.assertEqual(delivery_oysters["quantity"], 8)
+        self.assertEqual(delivery_oysters["order_revenue"], 10_000)
+        self.assertEqual(delivery_oysters["units_per_10k"], 8)
+        self.assertEqual(delivery_oysters["gross_sales"], 20_000)
+        self.assertEqual(delivery_oysters["units_per_10k_gross_sales"], 4)
+
+        fallback = by_key[("乙店", "鸡翅", "外卖")]
         self.assertEqual(fallback["档口"], "烧烤")
         self.assertEqual(fallback["units_per_10k"], 10)
 
-        all_oysters = by_key[(profile.ALL_STORES_LABEL, "蒜蓉生蚝")]
-        self.assertEqual(all_oysters["quantity"], 20)
-        self.assertAlmostEqual(all_oysters["units_per_10k"], 20 / 15_000 * 10_000, places=4)
-        self.assertAlmostEqual(all_oysters["units_per_10k_gross_sales"], 20 / 30_000 * 10_000, places=4)
+        all_dine_in_oysters = by_key[(profile.ALL_STORES_LABEL, "蒜蓉生蚝", "堂食")]
+        self.assertEqual(all_dine_in_oysters["quantity"], 12)
+        self.assertAlmostEqual(all_dine_in_oysters["units_per_10k"], 12 / 15_000 * 10_000, places=4)
+        self.assertAlmostEqual(all_dine_in_oysters["units_per_10k_gross_sales"], 12 / 30_000 * 10_000, places=4)
+
+        all_delivery_oysters = by_key[(profile.ALL_STORES_LABEL, "蒜蓉生蚝", "外卖")]
+        self.assertEqual(all_delivery_oysters["quantity"], 10)
+        self.assertAlmostEqual(all_delivery_oysters["units_per_10k"], 10 / 15_000 * 10_000, places=4)
+        self.assertAlmostEqual(all_delivery_oysters["units_per_10k_gross_sales"], 10 / 30_000 * 10_000, places=4)
+        self.assertFalse(any(row["门店名称"] == "范围外门店" for row in rows))
+
+    def test_product_sales_class_requires_exact_dine_in_order_category(self) -> None:
+        catalog = self.catalog_for({})
+        rows = profile.aggregate_product_sales_per_10k_rows(
+            [
+                {"门店": "甲店", "菜品名称": "精确值", "订单分类": "店内销售", "菜品销售数量": "1"},
+                {"门店": "甲店", "菜品名称": "带空格", "订单分类": " 店内销售 ", "菜品销售数量": "1"},
+                {"门店": "甲店", "菜品名称": "空分类", "订单分类": "", "菜品销售数量": "1"},
+                {"门店": "甲店", "菜品名称": "即时零售", "订单分类": "京东秒送", "菜品销售数量": "1"},
+            ],
+            catalog,
+            {("current", "甲店"): 10_000, ("current", profile.ALL_STORES_LABEL): 10_000},
+            period_key="current",
+            period_label="当前区间",
+        )
+
+        classes = {
+            row["产品名称"]: row["销售分类"]
+            for row in rows
+            if row["门店名称"] == "甲店"
+        }
+        self.assertEqual(classes, {
+            "精确值": "堂食",
+            "带空格": "外卖",
+            "空分类": "外卖",
+            "即时零售": "外卖",
+        })
 
     def test_gross_sales_map_uses_gross_sales_and_aggregates_all_stores(self) -> None:
         rows = [
