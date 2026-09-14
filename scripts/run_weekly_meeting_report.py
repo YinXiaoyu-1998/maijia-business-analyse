@@ -28,6 +28,7 @@ def main() -> None:
     parser.add_argument("--previous-end")
     parser.add_argument("--yoy-start")
     parser.add_argument("--yoy-end")
+    parser.add_argument("--store-name-contains", nargs="+")
     args = parser.parse_args()
 
     script_dir = Path(__file__).resolve().parent
@@ -43,6 +44,8 @@ def main() -> None:
         profile_cmd.extend(["--dish-input", *[str(path) for path in args.dish_input]])
     if args.catalog:
         profile_cmd.extend(["--catalog", str(args.catalog)])
+    if args.store_name_contains:
+        profile_cmd.extend(["--store-name-contains", *args.store_name_contains])
     for option in [
         "current_start",
         "current_end",
