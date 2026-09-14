@@ -281,6 +281,13 @@ def store_size_bucket(name: Any) -> str:
     return "未分组"
 
 
+def store_matches_filter(name: Any, store_name_contains: list[str] | None) -> bool:
+    if not store_name_contains:
+        return True
+    text = str(name or "")
+    return any(fragment in text for fragment in store_name_contains)
+
+
 def col_to_num(col: str) -> int:
     value = 0
     for char in col:
@@ -1229,6 +1236,7 @@ def profile_dish_inputs(
     catalog_path: Path,
     output_dir: Path,
     target_windows: dict[str, tuple[str, date, date]],
+    store_name_contains: list[str] | None = None,
     output_prefix: str = "weekly",
 ) -> dict[str, Any]:
     catalog = load_catalog(catalog_path)
@@ -1250,6 +1258,7 @@ def profile_dish_inputs(
     processed_rows = 0
     skipped_duplicate_rows = 0
     skipped_out_of_scope_rows = 0
+    skipped_store_filter_rows = 0
     skipped_out_of_scope_files: list[str] = []
     target_dates = dates_for_target_windows(target_windows)
 
@@ -1289,6 +1298,9 @@ def profile_dish_inputs(
                 continue
 
             store = row.get("门店", "") or "未知门店"
+            if not store_matches_filter(store, store_name_contains):
+                skipped_store_filter_rows += 1
+                continue
             dish_name = row.get("菜品名称", "") or "未知菜品"
             linked_dish_name = row.get("关联菜品名称", "")
             channel = row.get("订单分类", "") or "未知渠道"
@@ -1340,6 +1352,7 @@ def profile_dish_inputs(
         {"metric": "catalog_stall_count", "value": catalog["stall_count"]},
         {"metric": "skipped_duplicate_rows", "value": skipped_duplicate_rows},
         {"metric": "skipped_out_of_scope_rows", "value": skipped_out_of_scope_rows},
+        {"metric": "skipped_store_filter_rows", "value": skipped_store_filter_rows},
         {"metric": "skipped_out_of_scope_files", "value": len(skipped_out_of_scope_files)},
     ]
     write_csv(output_dir / "dish_catalog_match_summary.csv", match_rows, ["metric", "value"])
@@ -1367,6 +1380,7 @@ def profile_dish_inputs(
         "processed_rows": processed_rows,
         "processed_date_start": date_text(min(processed_dates)) if processed_dates else None,
         "processed_date_end": date_text(max(processed_dates)) if processed_dates else None,
+        "skipped_store_filter_rows": skipped_store_filter_rows,
         "skipped_out_of_scope_files": skipped_out_of_scope_files,
         "period_coverage": {
             key: {
@@ -1530,6 +1544,7 @@ def profile_stall_sales_mix(
     dine_in_revenue_by_period_store: dict[tuple[str, str], float],
     order_revenue_by_period_store: dict[tuple[str, str], float],
     gross_sales_by_period_store: dict[tuple[str, str], float],
+    store_name_contains: list[str] | None = None,
     output_prefix: str = "weekly",
 ) -> dict[str, Any]:
     output_name = f"{output_prefix}_store_stall_sales_mix.csv"
@@ -1591,6 +1606,7 @@ def profile_stall_sales_mix(
     processed_rows = 0
     skipped_duplicate_rows = 0
     skipped_out_of_scope_rows = 0
+    skipped_store_filter_rows = 0
     skipped_non_dine_in_rows = 0
     skipped_out_of_scope_files: list[str] = []
     target_dates = dates_for_target_windows(target_windows)
@@ -1634,6 +1650,10 @@ def profile_stall_sales_mix(
             if not period_key:
                 skipped_out_of_scope_rows += 1
                 continue
+            store = row.get("门店", "") or "未知门店"
+            if not store_matches_filter(store, store_name_contains):
+                skipped_store_filter_rows += 1
+                continue
             if period_key == "current":
                 add_product_sales_observation(product_groups, row, catalog, product_allowed_stores)
             if str(row.get("订单分类") or "").strip() != DINE_IN_DISH_CHANNEL:
@@ -1641,7 +1661,6 @@ def profile_stall_sales_mix(
                 continue
 
             period_label = target_windows[period_key][0]
-            store = row.get("门店", "") or "未知门店"
             dish_name = row.get("菜品名称", "") or "未知菜品"
             linked_dish_name = row.get("关联菜品名称", "")
             stall, match_status, match_source = resolve_stall_from_names(
@@ -1747,6 +1766,7 @@ def profile_stall_sales_mix(
         "processed_date_end": date_text(max(processed_dates)) if processed_dates else None,
         "skipped_duplicate_rows": skipped_duplicate_rows,
         "skipped_out_of_scope_rows": skipped_out_of_scope_rows,
+        "skipped_store_filter_rows": skipped_store_filter_rows,
         "skipped_non_dine_in_rows": skipped_non_dine_in_rows,
         "skipped_out_of_scope_files": skipped_out_of_scope_files,
         "current_business_dine_in_revenue": fmt(current_revenue, 2),
@@ -1784,6 +1804,7 @@ def profile(
     target_windows: dict[str, tuple[str, date, date]],
     dish_inputs: list[Path] | None = None,
     catalog_path: Path | None = None,
+    store_name_contains: list[str] | None = None,
 ) -> dict[str, Any]:
     progress(f"开始周报 profiling: business_inputs={len(inputs)}, dish_inputs={len(dish_inputs or [])}")
     inspections = []
@@ -1812,6 +1833,7 @@ def profile(
     processed_dates: set[date] = set()
     skipped_duplicate_rows = 0
     skipped_summary_rows = 0
+    skipped_store_filter_rows = 0
     processed_rows = 0
 
     for index, path in enumerate(inputs):
@@ -1851,6 +1873,9 @@ def profile(
 
             key_store = store_key(row)
             if key_store[0] == "未知门店":
+                continue
+            if not store_matches_filter(key_store[0], store_name_contains):
+                skipped_store_filter_rows += 1
                 continue
 
             start = week_start_sunday(parsed_date)
@@ -1991,6 +2016,7 @@ def profile(
             catalog_path,
             output_dir,
             target_windows,
+            store_name_contains=store_name_contains,
             output_prefix="weekly",
         )
         stall_attribution_meta["basis"] = "分组=菜品名称优先匹配菜品库「总部菜品.基础分类」，未匹配时使用关联菜品名称补齐；指标=菜品主题数据「菜品收入」；按门店、档口比较本周、环比周、同比周。"
@@ -2007,6 +2033,7 @@ def profile(
         build_dine_in_revenue_map(target_rows),
         build_order_revenue_map(target_rows),
         build_gross_sales_map(target_rows),
+        store_name_contains=store_name_contains,
         output_prefix="weekly",
     )
 
@@ -2061,6 +2088,8 @@ def profile(
             "processed_rows": processed_rows,
             "skipped_duplicate_rows": skipped_duplicate_rows,
             "skipped_summary_rows": skipped_summary_rows,
+            "skipped_store_filter_rows": skipped_store_filter_rows,
+            "store_name_contains_filter": store_name_contains or [],
             "store_count": len(stores),
             "outputs": [
                 "weekly_store_metrics.csv",
@@ -2156,18 +2185,27 @@ def main() -> None:
     parser.add_argument("--previous-end", type=parse_date, default=DEFAULT_TARGET_WINDOWS["previous"][2])
     parser.add_argument("--yoy-start", type=parse_date, default=DEFAULT_TARGET_WINDOWS["yoy"][1])
     parser.add_argument("--yoy-end", type=parse_date, default=DEFAULT_TARGET_WINDOWS["yoy"][2])
+    parser.add_argument("--store-name-contains", nargs="+")
     args = parser.parse_args()
     target_windows = {
         "current": ("本周", args.current_start, args.current_end),
         "previous": ("环比周", args.previous_start, args.previous_end),
         "yoy": ("同比周", args.yoy_start, args.yoy_end),
     }
-    summary = profile(args.input, args.output_dir, target_windows, args.dish_input, args.catalog)
+    summary = profile(
+        args.input,
+        args.output_dir,
+        target_windows,
+        args.dish_input,
+        args.catalog,
+        args.store_name_contains,
+    )
     print(json.dumps({
         "coverage_start": summary["meta"]["coverage_start"],
         "coverage_end": summary["meta"]["coverage_end"],
         "processed_rows": summary["meta"]["processed_rows"],
         "skipped_duplicate_rows": summary["meta"]["skipped_duplicate_rows"],
+        "skipped_store_filter_rows": summary["meta"]["skipped_store_filter_rows"],
         "output_dir": str(args.output_dir),
     }, ensure_ascii=False, indent=2))
 
